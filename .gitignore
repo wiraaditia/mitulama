@@ -63,3 +63,6 @@ tmp/
 # Documentation artifacts (optional - keep if you want to share)
 # .gemini/
 NEWS_ANALYSIS_FEATURE.md
+
+# Cache files
+*.pkl
