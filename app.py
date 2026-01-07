@@ -631,6 +631,11 @@ if st.session_state.get('scroll_to_top', False):
     st.session_state.scroll_to_top = False
 
 
+# --- DATA PRE-FETCHING (Global) ---
+if 'ihsg_info_live' not in st.session_state or st.session_state.get('refresh_ihsg', False):
+    st.session_state.ihsg_info_live = get_ihsg_info()
+    st.session_state.refresh_ihsg = False
+
 # --- UI COMPONENT: SIDEBAR (WATCHLIST ONLY) ---
 with st.sidebar:
     # Remove default padding & Reduce Top Margin AGGRESSIVELY
@@ -698,6 +703,7 @@ with st.sidebar:
             clear_watchlist_cache()
             if 'watchlist_data_list' in st.session_state:
                 del st.session_state.watchlist_data_list
+            st.session_state.refresh_ihsg = True # Paksa refresh IHSG juga
             st.rerun()
 
     # Search Input (Conditional)
@@ -755,48 +761,58 @@ with st.sidebar:
         if cached_watchlist:
             st.session_state.watchlist_data_list = cached_watchlist
         else:
-            # Generate list using Batch Download for Speed
-            with st.spinner("📦 Loading Market Data..."):
-                try:
-                    # Fetch 200+ tickers in ONE call instead of loop
-                    batch_data = yf.download(TICKERS, period="2d", group_by='ticker', threads=True, progress=False)
-                except:
-                    batch_data = pd.DataFrame()
+            # Generate list using Fast Info (Parallel) for Real-time accuracy
+            with st.spinner("📦 Loading Real-time Data..."):
+                def fetch_ticker_info(t):
+                    try:
+                        ticker_obj = yf.Ticker(t)
+                        # fast_info is often more real-time than history()
+                        fi = ticker_obj.fast_info
+                        current_price = fi.last_price
+                        prev_close = fi.previous_close
+                        
+                        if current_price is None or prev_close is None:
+                            # Fallback to history if fast_info fails
+                            hist = ticker_obj.history(period="2d")
+                            if not hist.empty:
+                                current_price = hist['Close'].iloc[-1]
+                                prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else hist['Open'].iloc[0]
+                            else:
+                                return None
+
+                        chg_pct = ((current_price - prev_close) / prev_close * 100) if prev_close > 0 else 0
+                        
+                        return {
+                            "ticker": t.replace('.JK', ''),
+                            "price": int(current_price),
+                            "chg": chg_pct,
+                            "prev": prev_close
+                        }
+                    except:
+                        return None
 
                 wl = []
-                # Fallback names map for common ones
+                # Fallback names map
                 names_map = {
-                    "BBCA": "Bank Central Asia Tbk.",
-                    "BBRI": "Bank Rakyat Indonesia.",
-                    "BMRI": "Bank Mandiri (Persero).",
-                    "GOTO": "GoTo Gojek Tokopedia Tbk.",
-                    "TLKM": "Telkom Indonesia Tbk."
+                    "BBCA": "Bank Central Asia Tbk.", "BBRI": "Bank Rakyat Indonesia.", "BMRI": "Bank Mandiri (Persero).",
+                    "GOTO": "GoTo Gojek Tokopedia Tbk.", "TLKM": "Telkom Indonesia Tbk.", "ASII": "Astra International Tbk."
                 }
                 
-                for t in TICKERS:
-                    ticker = t.replace('.JK', '')
-                    try:
-                        # Extract from batch
-                        if isinstance(batch_data, pd.DataFrame) and t in batch_data.columns.levels[0]:
-                            hist = batch_data[t]
-                            price = int(hist['Close'].iloc[-1])
-                            prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else hist['Open'].iloc[0]
-                            chg = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
-                        else:
-                            raise ValueError("No data")
-                    except:
-                        # Random Fallback if data missing
-                        price = random.randint(100, 10000)
-                        chg = random.uniform(-2, 2)
-                    
-                    logo = f"https://assets.stockbit.com/logos/companies/{ticker}.png"
-                    wl.append({
-                        "ticker": ticker,
-                        "name": names_map.get(ticker, "Emiten Indonesia Tbk"),
-                        "price": price,
-                        "chg": chg,
-                        "logo": logo
-                    })
+                # Fetch Parallel
+                with ThreadPoolExecutor(max_workers=30) as executor:
+                    results = list(executor.map(fetch_ticker_info, TICKERS))
+                
+                for res in results:
+                    if res:
+                        ticker = res['ticker']
+                        logo = f"https://assets.stockbit.com/logos/companies/{ticker}.png"
+                        wl.append({
+                            "ticker": ticker,
+                            "name": names_map.get(ticker, "Emiten Indonesia Tbk"),
+                            "price": res['price'],
+                            "chg": res['chg'],
+                            "logo": logo
+                        })
                 
                 st.session_state.watchlist_data_list = wl
                 save_watchlist_cache(wl)
@@ -866,7 +882,12 @@ with st.sidebar:
                 st.rerun()
         
         st.caption(f"Showing {min(st.session_state.watchlist_limit, len(st.session_state.watchlist_data_list))} of {len(st.session_state.watchlist_data_list)} assets")
-        st.caption("IHSG 7,350.12 (Live)")
+        # Integrasi IHSG dinamis di sidebar
+        if 'ihsg_info_live' in st.session_state and st.session_state.ihsg_info_live:
+            ihsg = st.session_state.ihsg_info_live
+            st.caption(f"IHSG {ihsg['price']:,.2f} ({ihsg['percent']:+.2f}%)")
+        else:
+            st.caption("IHSG 7,350.12 (Live)")
     
     # Gainer Tab
     with tab_gainer:
@@ -928,66 +949,70 @@ with st.sidebar:
         
 
 
-# --- UI COMPONENT: TICKER TAPE ---
-# Modern CSS Marquee
-st.markdown("""
-<div class="ticker-wrap">
-<div class="ticker">
-  <div class="ticker__item">BBCA <span class="up">▲ 9,975</span></div>
-  <div class="ticker__item">BBRI <span class="down">▼ 5,200</span></div>
-  <div class="ticker__item">BMRI <span class="up">▲ 7,125</span></div>
-  <div class="ticker__item">BBNI <span class="up">▲ 6,025</span></div>
-  <div class="ticker__item">TLKM <span class="down">▼ 2,130</span></div>
-  <div class="ticker__item">ASII <span class="up">▲ 5,100</span></div>
-  <div class="ticker__item">GOTO <span class="down">▼ 54</span></div>
-  <div class="ticker__item">UNVR <span class="down">▼ 2,340</span></div>
-  <div class="ticker__item">ADRO <span class="up">▲ 2,450</span></div>
-  <div class="ticker__item">ANTM <span class="up">▲ 1,560</span></div>
-  <!-- Duplicate for infinite loop illusion -->
-  <div class="ticker__item">BBCA <span class="up">▲ 9,975</span></div>
-  <div class="ticker__item">BBRI <span class="down">▼ 5,200</span></div>
-  <div class="ticker__item">BMRI <span class="up">▲ 7,125</span></div>
-  <div class="ticker__item">BBNI <span class="up">▲ 6,025</span></div>
-</div>
-</div>
-<style>
-.ticker-wrap {
-  width: 100%;
-  overflow: hidden;
-  background-color: #15191e;
-  padding-left: 100%; /* Start offscreen */
-  box-sizing: content-box;
-  border-bottom: 1px solid #2a2e39;
-  height: 30px;
-  line-height: 30px;
-  margin-bottom: 10px;
-}
-.ticker {
-  display: inline-block;
-  white-space: nowrap;
-  padding-right: 100%;
-  box-sizing: content-box;
-  animation-iteration-count: infinite;
-  animation-timing-function: linear;
-  animation-name: ticker;
-  animation-duration: 45s;
-}
-.ticker__item {
-  display: inline-block;
-  padding: 0 2rem;
-  font-size: 12px;
-  color: #d1d4dc;
-  font-weight: 600;
-}
-.ticker__item .up { color: #00c853; }
-.ticker__item .down { color: #ff5252; }
+# --- UI COMPONENT: TICKER TAPE (REAL DATA) ---
+# Menggunakan 10 data teratas dari watchlist
+@st.cache_data(ttl=300)
+def render_ticker_tape(watchlist):
+    items_html = ""
+    for item in watchlist[:12]:
+        color_class = "up" if item['chg'] >= 0 else "down"
+        arrow = "▲" if item['chg'] >= 0 else "▼"
+        items_html += f'<div class="ticker__item">{item["ticker"]} <span class="{color_class}">{arrow} {item["price"]:,}</span></div>'
+    
+    # Duplicate for infinite loop
+    items_html += items_html
+    
+    return f"""
+    <div class="ticker-wrap">
+    <div class="ticker">
+      {items_html}
+    </div>
+    </div>
+    <style>
+    .ticker-wrap {{
+      width: 100%;
+      overflow: hidden;
+      background-color: #15191e;
+      padding-left: 100%;
+      box-sizing: content-box;
+      border-bottom: 1px solid #2a2e39;
+      height: 30px;
+      line-height: 30px;
+      margin-bottom: 10px;
+    }}
+    .ticker {{
+      display: inline-block;
+      white-space: nowrap;
+      padding-right: 100%;
+      box-sizing: content-box;
+      animation-iteration-count: infinite;
+      animation-timing-function: linear;
+      animation-name: ticker;
+      animation-duration: 60s;
+    }}
+    .ticker__item {{
+      display: inline-block;
+      padding: 0 2rem;
+      font-size: 12px;
+      color: #d1d4dc;
+      font-weight: 600;
+    }}
+    .ticker__item .up {{ color: #00c853; }}
+    .ticker__item .down {{ color: #ff5252; }}
+    @keyframes ticker {{
+      0% {{ transform: translate3d(0, 0, 0); }}
+      100% {{ transform: translate3d(-100%, 0, 0); }}
+    }}
+    </style>
+    """
 
-@keyframes ticker {
-  0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(-100%, 0, 0); }
-}
-</style>
-""", unsafe_allow_html=True)
+if 'watchlist_data_list' in st.session_state:
+    st.markdown(render_ticker_tape(st.session_state.watchlist_data_list), unsafe_allow_html=True)
+else:
+    # Fallback to static if no watchlist data yet
+    st.markdown("""<div class="ticker-wrap"><div class="ticker">
+      <div class="ticker__item">BBCA <span class="up">▲ 10,100</span></div><div class="ticker__item">BBRI <span class="down">▼ 4,800</span></div>
+    </div></div>""", unsafe_allow_html=True)
 
 
 # --- MAIN LAYOUT (Tabs: Chart, Financials, Profile) ---
@@ -997,7 +1022,7 @@ current_symbol = st.session_state.ticker_selector
 logo_url = f"https://assets.stockbit.com/logos/companies/{current_symbol}.png"
 
 # --- IHSG DATA ---
-ihsg_data = get_ihsg_info()
+ihsg_data = st.session_state.ihsg_info_live
 if ihsg_data:
     ihsg_p = f"{ihsg_data['price']:,.2f}"
     ihsg_c = f"{ihsg_data['change']:+.2f}"
