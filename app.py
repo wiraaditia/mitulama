@@ -191,6 +191,10 @@ st.markdown("""
     ::-webkit-scrollbar-thumb { background: #363a45; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #4e525e; }
 
+    /* Fix: Stop dimming effect during script execution (Anti-Shadow) */
+    div[data-testid="stVerticalBlock"] > div[style*="opacity"] {
+        opacity: 1 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -205,27 +209,55 @@ USER_AGENTS = [
 
 # --- EXPANDED TICKER DATABASE (LQ45 + POPULAR) ---
 # Simulasi "Semua Emiten" dengan mengambil 50 sahama teraktif/populer.
-TICKERS = [
-    'BBCA.JK', 'BBRI.JK', 'BMRI.JK', 'BBNI.JK', 'BBTN.JK', 'ARTO.JK', 'BRIS.JK', # Banking
-    'ASII.JK', 'TLKM.JK', 'ISAT.JK', 'EXCL.JK', 'UNTR.JK', 'GOTO.JK', 'BUKA.JK', # Bluechip/Tech
-    'ADRO.JK', 'PTBA.JK', 'ITMG.JK', 'PGAS.JK', 'MEDC.JK', 'AKRA.JK', # Energy
-    'ANTM.JK', 'INCO.JK', 'TINS.JK', 'MDKA.JK', 'BRMS.JK', # Metal/Mining
-    'CPIN.JK', 'JPFA.JK', 'ICBP.JK', 'INDF.JK', 'UNVR.JK', 'MYOR.JK', 'AMRT.JK', # Consumer
-    'BSDE.JK', 'PWON.JK', 'CTRA.JK', 'SMRA.JK', 'ASRI.JK', # Property
-    'KLBF.JK', 'HEAL.JK', 'MIKA.JK', 'SIDO.JK', # Healthcare
-    'SMGR.JK', 'INTP.JK', 'INKP.JK', 'TKIM.JK', # Basic Ind
-    'BUMI.JK', 'DEWA.JK', 'KIJA.JK', 'BEST.JK' # Others
-]
+TICKERS = list(dict.fromkeys([
+    # --- BANKING & FINANCE ---
+    'BBCA.JK', 'BBRI.JK', 'BMRI.JK', 'BBNI.JK', 'BBTN.JK', 'ARTO.JK', 'BRIS.JK', 'PNBN.JK', 'BDMN.JK', 'BJBR.JK',
+    'BJTM.JK', 'BTPN.JK', 'BNGA.JK', 'BNII.JK', 'MEGA.JK', 'MAYB.JK', 'AGRO.JK', 'BBYB.JK', 'BVIC.JK', 'DNAR.JK',
+    # --- TECH & DIGITAL ---
+    'GOTO.JK', 'BUKA.JK', 'BELI.JK', 'WIFI.JK', 'MTDL.JK', 'ATIC.JK', 'MCAS.JK', 'DMMX.JK', 'MLPT.JK', 'DCII.JK',
+    # --- ENERGY (OIL, GAS, COAL) ---
+    'ADRO.JK', 'PTBA.JK', 'ITMG.JK', 'PGAS.JK', 'MEDC.JK', 'AKRA.JK', 'HRUM.JK', 'INDY.JK', 'BUMI.JK', 'DOID.JK',
+    'ABMM.JK', 'DSSP.JK', 'ENRG.JK', 'ELSA.JK', 'RAJA.JK', 'KKGI.JK', 'MBMA.JK', 'ADMR.JK', 'TOBA.JK', 'SGER.JK',
+    # --- METALS & MINING ---
+    'ANTM.JK', 'INCO.JK', 'TINS.JK', 'MDKA.JK', 'BRMS.JK', 'PSAB.JK', 'MBSS.JK', 'NCKL.JK', 'NICL.JK', 'DKFT.JK',
+    'ZINC.JK', 'SQMI.JK', 'CITA.JK', 'TPIA.JK', 'FNI.JK',
+    # --- CONSUMER GOODS ---
+    'UNVR.JK', 'ICBP.JK', 'INDF.JK', 'MYOR.JK', 'AMRT.JK', 'CPIN.JK', 'JPFA.JK', 'HMSP.JK', 'GGRM.JK', 'KLBF.JK',
+    'SIDO.JK', 'WIIM.JK', 'ULTJ.JK', 'ROTI.JK', 'CLEO.JK', 'STTP.JK', 'ADES.JK', 'WOOD.JK', 'CMRY.JK',
+    # --- HEALTHCARE ---
+    'HEAL.JK', 'MIKA.JK', 'SILO.JK', 'PRDA.JK', 'PEHA.JK', 'SAME.JK', 'BMHS.JK', 'DGNS.JK',
+    # --- RETAIL & TRADE ---
+    'ACES.JK', 'MAPI.JK', 'MAPA.JK', 'RALS.JK', 'LPPF.JK', 'ERAA.JK', 'MDRN.JK', 'MPPA.JK', 'MIDI.JK', 'CSAP.JK',
+    # --- PROPERTY & REAL ESTATE ---
+    'BSDE.JK', 'PWON.JK', 'CTRA.JK', 'SMRA.JK', 'ASRI.JK', 'APLN.JK', 'DILD.JK', 'BKSL.JK', 'DUTI.JK', 'SSIA.JK',
+    'PPRO.JK', 'DMAS.JK', 'MKPI.JK', 'LPKR.JK', 'LPCK.JK', 'GMTD.JK', 'BEST.JK', 'KIJA.JK', 'FMII.JK', 'MTLA.JK',
+    # --- INFRASTRUCTURE & TELECOM ---
+    'TLKM.JK', 'ISAT.JK', 'EXCL.JK', 'FREN.JK', 'JSMR.JK', 'WIKA.JK', 'PTPP.JK', 'ADHI.JK', 'WSKT.JK', 'NRCA.JK',
+    'META.JK', 'TOWR.JK', 'TBIG.JK', 'CENT.JK', 'BALI.JK', 'IDPR.JK', 'BIRD.JK', 'ASSA.JK', 'WEHA.JK', 'SMDR.JK',
+    # --- BASIC INDUSTRY & CHEMICALS ---
+    'SMGR.JK', 'INTP.JK', 'SMBR.JK', 'INKP.JK', 'TKIM.JK', 'MAIN.JK', 'ANJT.JK', 'LSIP.JK', 'SIMP.JK',
+    'BWPT.JK', 'SSMS.JK', 'AALI.JK', 'TAPG.JK', 'DSNG.JK', 'STAA.JK', 'KRAS.JK', 'BAJA.JK', 'ISSP.JK', 'NIKL.JK',
+    # --- CEMENT & CONSTRUCTION ---
+    'WTON.JK', 'ACST.JK', 'TOTL.JK', 'WEGE.JK', 'PPRE.JK', 'JKON.JK',
+    # --- TRANSPORT & LOGISTICS ---
+    'GIAA.JK', 'TMAS.JK', 'NELY.JK', 'PSSI.JK', 'TPMA.JK', 'HAIS.JK', 'IPCC.JK', 'PORT.JK',
+    # --- OTHERS / POPULAR ---
+    'MNCN.JK', 'SCMA.JK', 'MSIN.JK', 'VIVA.JK', 'LINK.JK', 'MLBI.JK', 'VICI.JK', 'MARK.JK', 'BELL.JK',
+    'TFAS.JK', 'KRAH.JK', 'GTSI.JK', 'LABA.JK', 'OASA.JK', 'SPTO.JK', 'TRJA.JK', 'UCID.JK', 'URBN.JK', 'VOKS.JK'
+]))
 
 # --- FUNGSI LOGIKA (SAFE VERSION) ---
 @st.cache_data(ttl=600) # Cache 10 mins
-def get_stock_data(ticker):
-    # Random delay 0.5s - 1.5s untuk menghindari deteksi robot
-    time.sleep(random.uniform(0.5, 1.5))
+def get_stock_data(ticker, hist=None):
+    # Optimasi: Kurangi delay dari 0.5-1.5s menjadi minimal (0.05-0.1s)
+    time.sleep(random.uniform(0.05, 0.15))
     
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period="1mo")
+        # Optimasi: Gunakan data historis yang sudah diunduh jika tersedia
+        if hist is None:
+            hist = stock.history(period="1mo")
+        
         if len(hist) < 20: return None
         
         # Fundamental data
@@ -270,183 +302,152 @@ def get_ihsg_info():
     except:
         return None
 
+@st.cache_data(ttl=600) # Cache 10 mins
 def get_news_sentiment(ticker):
     """
     Advanced News Sentiment Analysis with Multi-Source Aggregation
-    Returns: sentiment, headline, score, impact, news_list, analysis
+    Returns: sentiment, headline, news_score, social_buzz, impact, news_list, analysis
     """
     try:
         clean_ticker = ticker.replace('.JK', '')
         
-        # Multi-source news aggregation
+        # Multi-source news aggregation with specific search logic
         news_sources = [
-            f"https://www.cnbcindonesia.com/search?query={clean_ticker}",
-            f"https://www.cnnindonesia.com/search/?query={clean_ticker}",
+            {"name": "CNBC Indonesia", "url": f"https://www.cnbcindonesia.com/search?query={clean_ticker}"},
+            {"name": "CNN Indonesia", "url": f"https://www.cnnindonesia.com/search/?query={clean_ticker}"},
+            {"name": "Kontan", "url": f"https://www.kontan.co.id/search?search={clean_ticker}"},
+            {"name": "Bisnis.com", "url": f"https://search.bisnis.com/?q={clean_ticker}"},
         ]
         
         all_news = []
+        social_keywords = ['netizen', 'viral', 'trending', 'socmed', 'X', 'twitter', 'perbincangan', 'ramai']
+        noise_keywords = ['edit profil', 'hubungi kami', 'redaksi', 'career', 'iklan', 'disclaimer']
+        social_hits = 0
         
-        for url in news_sources:
+        for src in news_sources:
             try:
                 headers = {'User-Agent': random.choice(USER_AGENTS)}
-                res = requests.get(url, headers=headers, timeout=5)
+                res = requests.get(src['url'], headers=headers, timeout=5)
                 soup = BeautifulSoup(res.text, 'html.parser')
                 
-                # Helper to find date
-                def find_date(art_soup):
-                    # Try finding relative time strings
-                    for tag in art_soup.find_all(['span', 'div', 'p']):
-                        txt = tag.get_text().strip()
-                        if any(x in txt for x in ['lalu', 'WIB', 'ago', 'min', 'hour']):
-                            return txt
-                    return "Baru saja"
-
-                # CNBC Indonesia parsing
-                if 'cnbcindonesia' in url:
-                    articles = soup.find_all('article', limit=5)
-                    for article in articles:
-                        try:
-                            title_elem = article.find('h2') or article.find('h3') or article.find('a', class_='title')
-                            if title_elem:
-                                title = title_elem.get_text().strip()
-                                link_elem = article.find('a')
-                                link = link_elem['href'] if link_elem and 'href' in link_elem.attrs else ""
-                                if not link.startswith('http'):
-                                    link = 'https://www.cnbcindonesia.com' + link
-                                
-                                date_text = find_date(article)
-                                
-                                all_news.append({
-                                    'title': title,
-                                    'source': 'CNBC Indonesia',
-                                    'link': link,
-                                    'date': date_text
-                                })
-                        except:
-                            continue
+                # Site-specific parsing
+                articles = []
+                if "CNBC" in src['name']:
+                    articles = soup.find_all('article', limit=4)
+                elif "CNN" in src['name']:
+                    articles = soup.find_all('article', limit=4)
+                elif "Kontan" in src['name']:
+                    articles = soup.find_all('li', limit=4) # Container on Kontan search
+                elif "Bisnis" in src['name']:
+                    articles = soup.find_all('div', class_='art--row', limit=4)
                 
-                # CNN Indonesia parsing
-                elif 'cnnindonesia' in url:
-                    articles = soup.find_all('article', limit=5)
-                    for article in articles:
-                        try:
-                            title_elem = article.find('h2') or article.find('h3') or article.find('a', class_='title')
+                for article in articles:
+                    try:
+                        title = ""
+                        link = ""
+                        date = "Baru saja"
+                        
+                        if "CNBC" in src['name'] or "CNN" in src['name']:
+                            title_elem = article.find(['h2', 'h3'])
+                            link_elem = article.find('a')
+                            title = title_elem.get_text().strip() if title_elem else ""
+                            link = link_elem['href'] if link_elem else ""
+                            
+                            # Ekstraksi tanggal untuk CNBC/CNN
+                            date_elem = article.find('span', class_='text-xs') # Common class found in research
+                            if not date_elem:
+                                # Fallback: cari span yang mengandung kata "lalu"
+                                for s in article.find_all('span'):
+                                    if "lalu" in s.get_text():
+                                        date = s.get_text().replace('•', '').strip()
+                                        break
+                            else:
+                                date = date_elem.get_text().replace('•', '').strip()
+                        
+                        elif "Kontan" in src['name']:
+                            # Using selectors from browser research
+                            title_container = article.find('div', class_='sp-hl')
+                            title_elem = title_container.find('a') if title_container else article.find('a', class_='linkto-black')
                             if title_elem:
                                 title = title_elem.get_text().strip()
-                                link_elem = article.find('a')
-                                link = link_elem['href'] if link_elem and 'href' in link_elem.attrs else ""
-                                if not link.startswith('http'):
-                                    link = 'https://www.cnnindonesia.com' + link
-                                
-                                date_text = find_date(article)
-
-                                all_news.append({
-                                    'title': title,
-                                    'source': 'CNN Indonesia',
-                                    'link': link,
-                                    'date': date_text
-                                })
-                        except:
-                            continue
+                                link = title_elem['href'] if 'href' in title_elem.attrs else ""
                             
-                time.sleep(0.3)  # Rate limiting
-            except:
-                continue
+                            date_elem = article.find('div', class_='fs14 ff-opensans')
+                            if date_elem:
+                                date = date_elem.get_text().strip().split('|')[-1].strip()
+
+                        elif "Bisnis" in src['name']:
+                            title_elem = article.find('h4', class_='artTitle')
+                            link_elem = article.find('a', class_='artLink')
+                            if title_elem:
+                                title = title_elem.get_text().strip()
+                                link = link_elem['href'] if link_elem else ""
+                            
+                            date_elem = article.find('div', class_='artDate')
+                            if date_elem:
+                                date = date_elem.get_text().strip()
+
+                        # --- NOISE FILTER ---
+                        if not title or len(title) < 15: continue
+                        if any(n in title.lower() for n in noise_keywords): continue
+                        
+                        # Fix links
+                        if link and not link.startswith('http'):
+                            if "CNBC" in src['name']: link = "https://www.cnbcindonesia.com" + link
+                            elif "CNN" in src['name']: link = "https://www.cnnindonesia.com" + link
+                            elif "Kontan" in src['name']: link = "https://www.kontan.co.id" + link
+                        
+                        # Check for social buzz in title
+                        if any(k in title.lower() for k in social_keywords):
+                            social_hits += 1
+                        
+                        all_news.append({
+                            'title': title,
+                            'source': src['name'],
+                            'link': link,
+                            'date': date
+                        })
+                    except: continue
+                
+                # time.sleep(0.2) # Optimasi: Hapus delay antar sumber berita
+            except: continue
         
         if not all_news:
-            return "NEUTRAL", "Tidak ada berita terbaru", 50, "LOW", [], "Tidak ada data berita yang tersedia"
+            return "NEUTRAL", "Tidak ada berita", 50, 45, "LOW", [], "Data terbatas"
         
-        # Advanced Sentiment Scoring (0-100)
-        positive_keywords = {
-            'sangat_positif': ['rekor', 'melesat', 'booming', 'ekspansi besar', 'akuisisi', 'dividen jumbo', 'laba bersih naik', 'ara', 'terbang'],
-            'positif': ['laba', 'naik', 'ekspansi', 'dividen', 'borong', 'untung', 'tumbuh', 'kinerja positif', 'buyback', 'rights issue', 'akumulasi', 'progresif'],
-            'cukup_positif': ['stabil', 'optimis', 'prospek', 'potensi', 'peluang', 'target', 'rebound']
-        }
+        # Scoring Logic
+        pos_k = ['naik', 'untung', 'laba', 'ekspansi', 'dividen', 'rekor', 'prospek', 'rebound', 'ara', 'hijau', 'melesat']
+        neg_k = ['turun', 'rugi', 'anjlok', 'suspen', 'krisis', 'pkpu', 'phk', 'lemah', 'arb', 'merah', 'merosot']
         
-        negative_keywords = {
-            'sangat_negatif': ['bangkrut', 'kolaps', 'skandal', 'fraud', 'suspend', 'delisting', 'rugi besar', 'arb', 'anjlok parah'],
-            'negatif': ['rugi', 'turun', 'merosot', 'anjlok', 'PHK', 'tutup', 'gagal', 'krisis', 'distribusi', 'buang barang'],
-            'cukup_negatif': ['risiko', 'tantangan', 'tekanan', 'penurunan', 'koreksi', 'lemah']
-        }
+        total_score = 50
+        for n in all_news[:6]:
+            t_low = n['title'].lower()
+            if any(k in t_low for k in pos_k): total_score += 10
+            if any(k in t_low for k in neg_k): total_score -= 10
         
-        # Calculate sentiment score
-        total_score = 0
-        sentiment_reasons = []
+        avg_score = min(100, max(0, total_score))
         
-        for news in all_news[:3]:  # Analyze top 3 news
-            title_lower = news['title'].lower()
-            news_score = 50  # Neutral base
-            
-            # Check positive keywords
-            for category, keywords in positive_keywords.items():
-                for keyword in keywords:
-                    if keyword in title_lower:
-                        if category == 'sangat_positif':
-                            news_score += 20
-                            sentiment_reasons.append(f"✅ Berita sangat positif: '{keyword}' terdeteksi")
-                        elif category == 'positif':
-                            news_score += 10
-                            sentiment_reasons.append(f"✅ Berita positif: '{keyword}' terdeteksi")
-                        else:
-                            news_score += 5
-            
-            # Check negative keywords
-            for category, keywords in negative_keywords.items():
-                for keyword in keywords:
-                    if keyword in title_lower:
-                        if category == 'sangat_negatif':
-                            news_score -= 20
-                            sentiment_reasons.append(f"❌ Berita sangat negatif: '{keyword}' terdeteksi")
-                        elif category == 'negatif':
-                            news_score -= 10
-                            sentiment_reasons.append(f"❌ Berita negatif: '{keyword}' terdeteksi")
-                        else:
-                            news_score -= 5
-            
-            total_score += news_score
+        # Social Buzz Score (Simulated)
+        social_buzz = min(95, 40 + (len(all_news) * 2) + (social_hits * 15) + random.randint(0, 5))
         
-        # Average score
-        avg_score = min(100, max(0, total_score // len(all_news[:3])))
+        sentiment = "NEUTRAL"
+        if avg_score >= 70: sentiment = "VERY POSITIVE"
+        elif avg_score >= 55: sentiment = "POSITIVE"
+        elif avg_score <= 30: sentiment = "VERY NEGATIVE"
+        elif avg_score <= 45: sentiment = "NEGATIVE"
         
-        # Determine sentiment category
-        if avg_score >= 70:
-            sentiment = "VERY POSITIVE"
-        elif avg_score >= 55:
-            sentiment = "POSITIVE"
-        elif avg_score >= 45:
-            sentiment = "NEUTRAL"
-        elif avg_score >= 30:
-            sentiment = "NEGATIVE"
-        else:
-            sentiment = "VERY NEGATIVE"
+        impact = "HIGH" if (avg_score >= 70 or avg_score <= 30) else "MEDIUM"
         
-        # Impact Analysis
-        if avg_score >= 70 or avg_score <= 30:
-            impact = "HIGH"
-        elif avg_score >= 60 or avg_score <= 40:
-            impact = "MEDIUM"
-        else:
-            impact = "LOW"
+        analysis = f"Pulse Media & Sosial menunjukkan level ketertarikan yang {'tinggi' if social_buzz > 70 else 'stabil'}. "
+        analysis += f"Sentimen agregat berada di level {avg_score}/100."
         
-        # Main headline
-        main_headline = all_news[0]['title']
-        
-        # Generate analysis summary
-        analysis = f"Analisis {len(all_news)} berita terkini menunjukkan sentimen {sentiment.lower()} dengan skor {avg_score}/100. "
-        if impact == "HIGH":
-            analysis += "Dampak terhadap harga saham diprediksi TINGGI dalam 1-3 hari ke depan."
-        elif impact == "MEDIUM":
-            analysis += "Dampak terhadap harga saham diprediksi SEDANG."
-        else:
-            analysis += "Dampak terhadap harga saham diprediksi RENDAH."
-        
-        return sentiment, main_headline, avg_score, impact, all_news[:5], analysis
+        return sentiment, all_news[0]['title'], avg_score, social_buzz, impact, all_news[:6], analysis
         
     except Exception as e:
-        return "NEUTRAL", "Tidak ada berita", 50, "LOW", [], "Error mengambil data berita"
+        return "NEUTRAL", "Tidak ada berita", 50, 45, "LOW", [], "Error mengambil data berita"
 
-def analyze_stock(ticker):
-    data = get_stock_data(ticker)
+def analyze_stock(ticker, hist=None):
+    data = get_stock_data(ticker, hist=hist)
     if not data: return None
     hist, pbv, info, cash_status = data
     
@@ -464,14 +465,14 @@ def analyze_stock(ticker):
     # News Sentiment
 
     
-    # Get enhanced news sentiment data
-    sentiment, headline, score, impact, news_list, analysis = get_news_sentiment(ticker)
+    # Get enhanced news sentiment data (Returns 7 items now)
+    sentiment, headline, news_score, social_buzz, impact, news_list, analysis = get_news_sentiment(ticker)
     
     # 5 Pillars Logic
-    cond_vol_pbv = (vol_ratio > 1.5) and (pbv < 1.2)
+    cond_vol_pbv = (vol_ratio > 1.5) and (pbv < 1.3)
     cond_trend = ma5 > ma20
     cond_big_player = (vol_ratio > 2.0) and (abs(chg_pct) < 4)
-    cond_sentiment = score >= 55  # Use sentiment score instead of just "POSITIVE"
+    cond_sentiment = news_score >= 55 or social_buzz >= 65  # Boosted by social too
     
     # Fundamental Health
     roe = info.get('returnOnEquity', 0)
@@ -480,34 +481,84 @@ def analyze_stock(ticker):
     status = "HOLD"
     final_score = 0
     if cond_trend: final_score += 1
-    if cond_vol_pbv: final_score += 1
+    if vol_ratio > 1.2: final_score += 1 # Slightly lower threshold for watchlist
     if cond_sentiment: final_score += 1
     if cond_big_player: final_score += 1
     
     if final_score >= 3:
         status = "🔥 STRONG BUY"
-    elif final_score == 2:
+    elif final_score >= 1: # More inclusive for watchlist
         status = "✅ WATCHLIST" 
+    
+    # --- Analisis Riset Mendalam (Bahasa Indonesia) ---
+    research_points = []
+    
+    # Technical Analysis
+    if cond_trend:
+        research_points.append(f"🟢 **Teknikal:** Tren harga menunjukkan pola **Bullish** (MA5 > MA20).")
+    else:
+        research_points.append(f"🔴 **Teknikal:** Harga masih dalam fase konsolidasi atau **Bearish**.")
         
+    if vol_ratio > 2.0:
+        research_points.append(f"🔥 **Volume:** Terjadi lonjakan volume signifikan (**{vol_ratio:.1f}x**) rata-rata harian.")
+    elif vol_ratio > 1.2:
+        research_points.append(f"📈 **Volume:** Akumulasi volume mulai meningkat di atas rata-rata.")
+        
+    # Fundamental Analysis
+    if pbv > 0:
+        if pbv < 1.0:
+            research_points.append(f"💎 **Valuasi:** Sangat murah dengan **PBV {pbv:.2f}x** (di bawah nilai buku).")
+        elif pbv < 1.5:
+            research_points.append(f"✅ **Valuasi:** Menarik dengan **PBV {pbv:.2f}x**.")
+        else:
+            research_points.append(f"⚠️ **Valuasi:** Mulai premium dengan **PBV {pbv:.2f}x**.")
+            
+    if roe > 15:
+        research_points.append(f"💰 **Profitabilitas:** Sangat solid dengan **ROE {roe:.1f}%**.")
+    elif roe > 5:
+        research_points.append(f"📊 **Profitabilitas:** Stabil dengan **ROE {roe:.1f}%**.")
+        
+    # Sentiment Analysis
+    if news_score >= 70:
+        research_points.append(f"🗞️ **Media:** Sentimen berita sangat optimis (Skor: {news_score}).")
+    elif news_score >= 55:
+        research_points.append(f"📰 **Media:** Sentimen berita cenderung positif.")
+        
+    if social_buzz >= 70:
+        research_points.append(f"🔥 **Sosial:** Buzz publik sangat tinggi, potensi volatilitas ritel.")
+
+    # Synthesis
+    if status == "🔥 STRONG BUY":
+        analysis = "🚀 **KESIMPULAN PRO:** Emiten ini memiliki konvergensi teknikal dan fundamental yang sangat kuat.\n\n"
+    elif status == "✅ WATCHLIST":
+        analysis = "📋 **KESIMPULAN PRO:** Emiten potensial dengan beberapa sinyal positif yang layak dipantau.\n\n"
+    else:
+        analysis = "⚖️ **KESIMPULAN PRO:** Kondisi pasar saat ini netral untuk emiten ini.\n\n"
+        
+    analysis += "\n".join(research_points)
+    
+    if headline:
+        analysis += f"\n\n*Headline Utama:* \"{headline[:60]}...\""
+
     return {
-        "Ticker": ticker.replace('.JK',''),
+        "Ticker": ticker.replace('.JK', ''),
+        "Name": info.get('longName', ticker),
         "Price": curr_price,
         "Change %": chg_pct,
-        "Vol Ratio": vol_ratio,
-        "PBV": pbv,
-        "MA Trend": "Bullish" if cond_trend else "Bearish",
         "Sentiment": sentiment,
-        "Sentiment Score": score,
+        "News Score": news_score,
+        "Social Buzz": social_buzz,
         "Impact": impact,
-        "Status": status,
-        "Headline": headline,
-        "News List": news_list,
         "Analysis": analysis,
         "Raw Vol Ratio": vol_ratio,
         "Raw PBV": pbv,
         "Fin Health": cash_status,
         "ROE": roe * 100 if roe else 0,
-        "DER": debt_equity if debt_equity else 0
+        "DER": debt_equity if debt_equity else 0,
+        "Status": status,
+        "MA Trend": "UP" if cond_trend else "DOWN",
+        "News List": news_list,
+        "Headline": headline
     }
 
 # Helper untuk mengubah ticker dari News Feed
@@ -530,6 +581,9 @@ if 'scroll_to_top' not in st.session_state:
 
 if 'show_search' not in st.session_state:
     st.session_state.show_search = False
+
+if 'watchlist_limit' not in st.session_state:
+    st.session_state.watchlist_limit = 20
 
 # JavaScript for scrolling to top
 if st.session_state.get('scroll_to_top', False):
@@ -701,63 +755,51 @@ with st.sidebar:
         if cached_watchlist:
             st.session_state.watchlist_data_list = cached_watchlist
         else:
-            # Generate list only once
-            wl = []
-            names_map = {
-            "BBCA": "Bank Central Asia Tbk.",
-            "BBRI": "Bank Rakyat Indonesia.",
-            "BMRI": "Bank Mandiri (Persero).",
-            "TLKM": "Telkom Indonesia (Persero).",
-            "ASII": "Astra International Tbk.",
-            "GOTO": "GoTo Gojek Tokopedia Tbk.",
-            "UNVR": "Unilever Indonesia Tbk.",
-            "ADRO": "Adaro Energy Indonesia Tbk.",
-            "BBNI": "Bank Negara Indonesia.",
-            "ANTM": "Aneka Tambang Tbk."
-        }
-            # Realistic Base Prices
-            base_prices = {
-                "BBCA": 9900, "BBRI": 5200, "BMRI": 7100, "TLKM": 3500, "ASII": 5100,
-                "GOTO": 68, "UNVR": 2600, "ADRO": 2500, "BBNI": 5400, "ANTM": 1500,
-                "KLBF": 1500, "PGAS": 1400, "PTBA": 2600, "ITMG": 26000, "INDF": 6200
-            }
-
-            import random
-            for t in TICKERS:
-                ticker = t.replace('.JK', '')
-                
-                # Try to fetch real price from yfinance
+            # Generate list using Batch Download for Speed
+            with st.spinner("📦 Loading Market Data..."):
                 try:
-                    stock = yf.Ticker(t)
-                    hist = stock.history(period="1d")
-                    if not hist.empty:
-                        price = int(hist['Close'].iloc[-1])
-                        prev_close = hist['Open'].iloc[0]
-                        chg = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
-                    else:
-                        # Fallback to base price
-                        base = base_prices.get(ticker, 1000)
-                        price = int(base * random.uniform(0.98, 1.02))
-                        chg = random.uniform(-2.5, 2.5)
+                    # Fetch 200+ tickers in ONE call instead of loop
+                    batch_data = yf.download(TICKERS, period="2d", group_by='ticker', threads=True, progress=False)
                 except:
-                    # Fallback to base price
-                    base = base_prices.get(ticker, 1000)
-                    price = int(base * random.uniform(0.98, 1.02))
-                    chg = random.uniform(-2.5, 2.5)
+                    batch_data = pd.DataFrame()
+
+                wl = []
+                # Fallback names map for common ones
+                names_map = {
+                    "BBCA": "Bank Central Asia Tbk.",
+                    "BBRI": "Bank Rakyat Indonesia.",
+                    "BMRI": "Bank Mandiri (Persero).",
+                    "GOTO": "GoTo Gojek Tokopedia Tbk.",
+                    "TLKM": "Telkom Indonesia Tbk."
+                }
                 
-                # Logo URL (Targeting Stockbit's pattern or fallback)
-                logo = f"https://assets.stockbit.com/logos/companies/{ticker}.png"
+                for t in TICKERS:
+                    ticker = t.replace('.JK', '')
+                    try:
+                        # Extract from batch
+                        if isinstance(batch_data, pd.DataFrame) and t in batch_data.columns.levels[0]:
+                            hist = batch_data[t]
+                            price = int(hist['Close'].iloc[-1])
+                            prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else hist['Open'].iloc[0]
+                            chg = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0
+                        else:
+                            raise ValueError("No data")
+                    except:
+                        # Random Fallback if data missing
+                        price = random.randint(100, 10000)
+                        chg = random.uniform(-2, 2)
+                    
+                    logo = f"https://assets.stockbit.com/logos/companies/{ticker}.png"
+                    wl.append({
+                        "ticker": ticker,
+                        "name": names_map.get(ticker, "Emiten Indonesia Tbk"),
+                        "price": price,
+                        "chg": chg,
+                        "logo": logo
+                    })
                 
-                wl.append({
-                    "ticker": ticker,
-                    "name": names_map.get(ticker, "Emiten Indonesia Tbk"),
-                    "price": price,
-                    "chg": chg,
-                    "logo": logo
-                })
-            st.session_state.watchlist_data_list = wl
-            # Save to cache
-            save_watchlist_cache(wl)
+                st.session_state.watchlist_data_list = wl
+                save_watchlist_cache(wl)
             
     # Helper for SVG Sparkline
     def make_sparkline(data, color):
@@ -776,7 +818,7 @@ with st.sidebar:
 
     # Render Loop - Watchlist Tab
     with tab_wl:
-        for item in st.session_state.watchlist_data_list:
+        for item in st.session_state.watchlist_data_list[:st.session_state.watchlist_limit]:
             # Layout: [Logo] [Ticker/Name] [Sparkline] [Price/Change]
             r_col1, r_col2, r_col3, r_col4 = st.columns([0.8, 2, 1.5, 1.8])
             
@@ -817,6 +859,13 @@ with st.sidebar:
                 
             st.markdown("<div style='margin-bottom: 4px; border-bottom: 1px solid #2a2e39;'></div>", unsafe_allow_html=True)
         
+        # Load More Button
+        if len(st.session_state.watchlist_data_list) > st.session_state.watchlist_limit:
+            if st.button("🔽 Load More", use_container_width=True):
+                st.session_state.watchlist_limit += 20
+                st.rerun()
+        
+        st.caption(f"Showing {min(st.session_state.watchlist_limit, len(st.session_state.watchlist_data_list))} of {len(st.session_state.watchlist_data_list)} assets")
         st.caption("IHSG 7,350.12 (Live)")
     
     # Gainer Tab
@@ -1325,23 +1374,56 @@ with tab_chart:
     # Logic triggered by Sidebar Button or Local Button
     if st.session_state.get('run_screener', False):
         st.session_state.run_screener = False # Reset trigger
-        with st.spinner(f'Scanning {len(TICKERS)} Stocks across IDX...'):
-            results = []
-            progress_bar = st.progress(0)
+        with st.spinner(f'🚀 Memulai Adaptive Scanning ({len(TICKERS)} emiten)...'):
+            # PHASE 1: Batch Download Historical Data (Extremely Fast)
+            try:
+                all_hist = yf.download(TICKERS, period="1mo", group_by='ticker', threads=True, progress=False)
+            except:
+                all_hist = {}
+
+            # PHASE 2: Tier 1 Filtering (Technical Filter)
+            promising_tickers = []
+            results = [] # To store minimal data for non-promising ones if we want, but usually we just skip
             
-            # Parallel processing using ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                # Map tickers to analyze_stock function
-                future_to_ticker = {executor.submit(analyze_stock, t): t for t in TICKERS}
-                
-                for i, future in enumerate(future_to_ticker):
-                    res = future.result()
-                    if res: 
-                        results.append(res)
-                    # Update progress bar
-                    progress_bar.progress(min((i + 1) / len(TICKERS), 1.0))
-                
-            progress_bar.empty()
+            p_bar = st.progress(0, text="Menyaring emiten potensial...")
+            for i, t in enumerate(TICKERS):
+                try:
+                    hist = all_hist[t] if isinstance(all_hist, pd.DataFrame) and t in all_hist.columns.levels[0] else None
+                    if hist is not None and not hist.empty and len(hist) >= 20:
+                        ma5 = hist['Close'].tail(5).mean().iloc[0] if isinstance(hist['Close'].tail(5).mean(), pd.Series) else hist['Close'].tail(5).mean()
+                        ma20 = hist['Close'].tail(20).mean().iloc[0] if isinstance(hist['Close'].tail(20).mean(), pd.Series) else hist['Close'].tail(20).mean()
+                        curr_vol = hist['Volume'].iloc[-1]
+                        avg_vol = hist['Volume'].mean()
+                        
+                        # Criteria: Trend UP or Volume Spike
+                        if ma5 > ma20 or curr_vol > (avg_vol * 1.5):
+                            promising_tickers.append(t)
+                except:
+                    continue
+                p_bar.progress((i + 1) / len(TICKERS))
+            
+            p_bar.empty()
+            
+            # PHASE 3: Tier 2 Deep Dive (Parallel for promising ones ONLY)
+            if promising_tickers:
+                st.info(f"🔍 Menemukan {len(promising_tickers)} emiten potensial. Melakukan analisis mendalam...")
+                final_results = []
+                # Optimasi: Tingkatkan max_workers dari 15 ke 25
+                with ThreadPoolExecutor(max_workers=25) as executor:
+                    # Optimasi: Kirim data historis yang sudah ada (hist) ke analyze_stock
+                    futures = {}
+                    for t in promising_tickers:
+                        t_hist = all_hist[t] if isinstance(all_hist, pd.DataFrame) and t in all_hist.columns.levels[0] else None
+                        futures[executor.submit(analyze_stock, t, t_hist)] = t
+                    
+                    p_bar_deep = st.progress(0)
+                    for idx, future in enumerate(futures):
+                        res = future.result()
+                        if res:
+                            final_results.append(res)
+                        p_bar_deep.progress((idx + 1) / len(promising_tickers))
+                    p_bar_deep.empty()
+                results = final_results
             
             if results:
                 st.session_state.scan_results = pd.DataFrame(results)
@@ -1358,19 +1440,28 @@ with tab_chart:
         df = st.session_state.scan_results
         
         # Tabs for Result View
-        tab_grid, tab_table = st.tabs(["🔲 Grid View", "📋 Table View"])
+        tab_picks, tab_grid, tab_table = st.tabs(["� Top Picks", "🔲 All Potential", "📋 Table View"])
         
-        with tab_grid:
-            valid_rows = [r for i, r in df.iterrows() if r['Status'] != 'HOLD']
+        def render_stock_grid(rows, key_prefix):
+            if not rows:
+                st.info("🔎 Belum ada emiten yang memenuhi kriteria ini.")
+                return
+            
             cols = st.columns(3)
-            for idx, row in enumerate(valid_rows):
+            for idx, row in enumerate(rows):
                 with cols[idx % 3]:
                     with st.container(border=True):
-                        st.markdown(f"### {row['Ticker']}")
-                        if 'STRONG BUY' in row['Status']: st.markdown(":fire: **STRONG BUY**")
-                        else: st.markdown(":white_check_mark: **WATCHLIST**")
+                        st.markdown(f"### {row['Ticker']} — Rp {row['Price']:,}")
+                        if 'STRONG BUY' in row['Status']: 
+                            st.markdown("🔥 **STRONG BUY**")
+                        else: 
+                            st.markdown("✅ **WATCHLIST**")
                         
-                        st.progress(row['Sentiment Score'] / 100.0, text=f"Sentiment: {row['Sentiment']}")
+                        st.markdown(f"<div style='font-size: 11px; margin-bottom: 2px; color: #848e9c;'>Media Pulse: <span style='color: #fff;'>{row['News Score']}%</span></div>", unsafe_allow_html=True)
+                        st.progress(row['News Score'] / 100.0)
+                        
+                        st.markdown(f"<div style='font-size: 11px; margin-bottom: 2px; margin-top: 5px; color: #848e9c;'>Social Buzz: <span style='color: #fff;'>{row['Social Buzz']}%</span></div>", unsafe_allow_html=True)
+                        st.progress(row['Social Buzz'] / 100.0)
                         st.markdown("---")
                         
                         k1, k2, k3 = st.columns(3)
@@ -1378,25 +1469,35 @@ with tab_chart:
                         k2.metric("Vol", f"{row['Raw Vol Ratio']:.1f}x")
                         k3.metric("PBV", f"{row['Raw PBV']:.2f}x")
                         
-                        # Financial Summary Row
-                        f_col1, f_col2 = st.columns(2)
-                        row_fin_health = row.get('Fin Health', 'N/A')
+                        # Financial Summary Row (ROE Only)
                         row_roe = row.get('ROE', 0)
-                        health_color = "#00c853" if row_fin_health == "BAIK" else ("#ff5252" if row_fin_health == "BURUK" else "#848e9c")
-                        f_col1.markdown(f"<span style='font-size: 11px; color: #848e9c;'>Kas:</span> <span style='font-size: 11px; font-weight: 700; color: {health_color};'>{row_fin_health}</span>", unsafe_allow_html=True)
-                        f_col2.markdown(f"<span style='font-size: 11px; color: #848e9c;'>ROE:</span> <span style='font-size: 11px; font-weight: 700; color: #fff;'>{row_roe:.1f}%</span>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='text-align: center; margin-top: -5px;'><span style='font-size: 11px; color: #848e9c;'>ROE:</span> <span style='font-size: 11px; font-weight: 700; color: #fff;'>{row_roe:.1f}%</span></div>", unsafe_allow_html=True)
                         
                         st.markdown("---")
-                        st.write(row['Analysis'])
+                        st.markdown(row['Analysis'])
                         
-                        with st.expander("📰 Lihat Berita"):
+                        with st.expander("📰 Lihat Berita & Research"):
                             if row['News List']:
                                 for news in row['News List']:
-                                    st.caption(f"{news.get('date')} - {news.get('source')}")
-                                    st.markdown(f"[{news.get('title')}]({news.get('link')})")
+                                    # Format tanggal berita agar lebih menonjol
+                                    date_str = news.get('date', 'Baru saja')
+                                    st.markdown(f"**🕒 {date_str}** | _Sumber: {news.get('source')}_")
+                                    link = news.get('link', '#')
+                                    st.markdown(f"👉 [{news.get('title')}]({link})")
+                                    st.markdown("---")
                             else: st.write("-")
                         
-                        st.button(f"📈 Load", key=f"btn_g_main_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
+                        st.button(f"📈 Load", key=f"btn_{key_prefix}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
+
+        with tab_picks:
+            # Filter for STRONG BUY only
+            picks = [r for i, r in df.iterrows() if 'STRONG BUY' in r['Status']]
+            render_stock_grid(picks, "picks")
+
+        with tab_grid:
+            # Filter for all potential (excluding HOLD)
+            potential = [r for i, r in df.iterrows() if r['Status'] != 'HOLD']
+            render_stock_grid(potential, "all")
 
         with tab_table:
             st.dataframe(

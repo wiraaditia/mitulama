@@ -74,9 +74,32 @@ streamlit run app.py
 http://localhost:8501
 ```
 
+## 💻 Cara Menjalankan (Lokal)
+
+Jika Anda sudah berada di dalam folder project, ikuti langkah ini:
+
+1. **Aktifkan Virtual Environment**:
+   ```powershell
+   .\.venv\Scripts\activate
+   ```
+
+2. **Instal Dependensi**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Jalankan Aplikasi**:
+   ```bash
+   streamlit run app.py
+   ```
+
+4. **Buka di Browser**:
+   Aplikasi akan berjalan di [http://localhost:8501](http://localhost:8501)
+
 ---
 
 ## 📦 Dependencies
+
 
 - `streamlit` - Web framework
 - `yfinance` - Stock data provider
@@ -192,8 +215,11 @@ EmitScan Indonesia mengadopsi design philosophy dari platform trading profesiona
 
 ## 📈 Roadmap
 
-### Version 2.1 (Coming Soon)
-- [ ] More news sources (Detik Finance, Kontan, Bisnis.com)
+### Version 2.1 (Current)
+- [x] More news sources (Kontan, Bisnis.com)
+- [x] Publication Dates for all sources
+- [x] Deep Research Analysis structure
+- [ ] More news sources (Detik Finance)
 - [ ] Historical sentiment tracking
 - [ ] Sentiment vs Price correlation analysis
 - [ ] Email/Telegram alerts
