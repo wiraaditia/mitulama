@@ -10,6 +10,7 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 import pickle
 import os
+import numpy as np
 
 # Cache file for persistent scanner results
 CACHE_FILE = ".scanner_cache.pkl"
@@ -106,6 +107,7 @@ st.markdown("""
         color: #e0e0e0 !important;
         font-size: 13px; /* Smaller font for pro feel */
         overflow-x: hidden !important; /* Remove horizontal scroll */
+        scroll-behavior: smooth !important;
     }
     
     /* Sidebar (Watchlist) */
@@ -195,6 +197,87 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] > div[style*="opacity"] {
         opacity: 1 !important;
     }
+
+    /* RESPONSIVE DESIGN OVERRIDES */
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        /* Header Stack */
+        .main-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 15px !important;
+            padding: 15px !important;
+        }
+        .header-right {
+            width: 100% !important;
+            justify-content: space-between !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        
+        /* Sidebar layout adjustment */
+        [data-testid="stSidebar"] {
+            width: 100% !important;
+        }
+        
+        /* Sidebar Tab Adjustments */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 5px !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            font-size: 11px !important;
+            padding: 0 4px !important;
+        }
+
+        /* Metrics Grid for Stock Cards */
+        .metrics-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+        }
+        
+        /* Adjust Font Sizes for Mobile */
+        span[style*="font-size: 20px"] { font-size: 16px !important; }
+        .wl-price { font-size: 12px !important; }
+        .wl-ticker { font-size: 12px !important; }
+        
+        /* Hide non-critical buttons on very small screens if needed */
+        @media (max-width: 480px) {
+            .header-right a { padding: 4px 8px !important; font-size: 9px !important; }
+        }
+    }
+    
+    /* Metrics Grid Utility */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+    .metric-item {
+        background: rgba(255,255,255,0.02);
+        padding: 6px;
+        border-radius: 4px;
+        text-align: center;
+    }
+    .metric-label {
+        font-size: 9px;
+        color: #848e9c;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 2px;
+    }
+    .metric-value {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e0e0e0;
+    }
+    
+    /* Prevent horizontal scroll from sparklines */
+    svg { max-width: 100%; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -246,19 +329,55 @@ TICKERS = list(dict.fromkeys([
     'TFAS.JK', 'KRAH.JK', 'GTSI.JK', 'LABA.JK', 'OASA.JK', 'SPTO.JK', 'TRJA.JK', 'UCID.JK', 'URBN.JK', 'VOKS.JK'
 ]))
 
+# --- CUSTOM CSS LOADING ANIMATION (Cyberpunk Style) ---
+def custom_loading_overlay(status_text="LOADING...", progress=0):
+    # Dynamic conic gradient for the ring
+    gradient = f"conic-gradient(#00c853 {progress}%, #1e222d 0)"
+    
+    return f"""<div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(19, 23, 34, 0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <!-- Circular Progress Container -->
+        <div style="position: relative; width: 120px; height: 120px; border-radius: 50%; background: {gradient}; display: flex; justify-content: center; align-items: center; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 200, 83, 0.2); animation: pulse-ring 2s infinite;">
+            <!-- Inner Circle (Mask) -->
+            <div style="width: 100px; height: 100px; background: #131722; border-radius: 50%; display: flex; justify-content: center; align-items: center; flex-direction: column;">
+                <div style="font-family: 'Courier New', monospace; color: #fff; font-size: 24px; font-weight: bold;">{progress}%</div>
+            </div>
+            <!-- Spinning Border for activity indication -->
+            <div style="position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px; border: 2px solid transparent; border-top: 2px solid #00c853; border-radius: 50%; animation: spin 1.5s linear infinite;"></div>
+        </div>
+        <div style="font-family: 'Courier New', monospace; color: #00c853; font-size: 18px; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0, 200, 83, 0.5);">{status_text}</div>
+        <div style="font-family: 'Courier New', monospace; color: #848e9c; font-size: 12px; margin-top: 10px;">Mencari emiten dari berbagai sumber...</div>
+        <style>
+            @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+            @keyframes pulse-ring {{ 0% {{ box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.4); }} 70% {{ box-shadow: 0 0 0 10px rgba(0, 200, 83, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(0, 200, 83, 0); }} }}
+        </style>
+    </div>"""
+
+# --- FUNGSI ITUNG-ITUNGAN (Tech Indicators) ---
+def calculate_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+def calculate_obv(df):
+    obv = (np.sign(df['Close'].diff()) * df['Volume']).fillna(0).cumsum()
+    return obv
+
 # --- FUNGSI LOGIKA (SAFE VERSION) ---
 @st.cache_data(ttl=600) # Cache 10 mins
 def get_stock_data(ticker, hist=None):
-    # Optimasi: Kurangi delay dari 0.5-1.5s menjadi minimal (0.05-0.1s)
-    time.sleep(random.uniform(0.05, 0.15))
+    # Optimasi: Kurangi delay untuk kecepatan maksimal (0.01-0.05s)
+    time.sleep(random.uniform(0.01, 0.05))
     
     try:
         stock = yf.Ticker(ticker)
         # Optimasi: Gunakan data historis yang sudah diunduh jika tersedia
         if hist is None:
-            hist = stock.history(period="1mo")
+            # Fetch 3 months for OBV and Trend Analysis
+            hist = stock.history(period="3mo")
         
-        if len(hist) < 20: return None
+        if len(hist) < 30: return None # Need more data for RSI/OBV (relaxed to 30)
         
         # Fundamental data
         try: 
@@ -302,7 +421,7 @@ def get_ihsg_info():
     except:
         return None
 
-@st.cache_data(ttl=600) # Cache 10 mins
+@st.cache_data(ttl=1800) # Cache 30 mins - reduce news scraping
 def get_news_sentiment(ticker):
     """
     Advanced News Sentiment Analysis with Multi-Source Aggregation
@@ -312,16 +431,31 @@ def get_news_sentiment(ticker):
         clean_ticker = ticker.replace('.JK', '')
         
         # Multi-source news aggregation with specific search logic
+        # Optimize search query to avoid irrelevant results (e.g. BEST -> Video Game)
+        # Use more specific query with "emiten" or "PT" to ensure stock-related news
+        search_query = f"emiten {clean_ticker}"
+        
         news_sources = [
-            {"name": "CNBC Indonesia", "url": f"https://www.cnbcindonesia.com/search?query={clean_ticker}"},
-            {"name": "CNN Indonesia", "url": f"https://www.cnnindonesia.com/search/?query={clean_ticker}"},
-            {"name": "Kontan", "url": f"https://www.kontan.co.id/search?search={clean_ticker}"},
-            {"name": "Bisnis.com", "url": f"https://search.bisnis.com/?q={clean_ticker}"},
+            {"name": "CNBC Indonesia", "url": f"https://www.cnbcindonesia.com/search?query={search_query}"},
+            {"name": "CNN Indonesia", "url": f"https://www.cnnindonesia.com/search/?query={search_query}"},
+            {"name": "Kontan", "url": f"https://www.kontan.co.id/search?search={search_query}"},
+            {"name": "Bisnis.com", "url": f"https://search.bisnis.com/?q={search_query}"},
         ]
         
         all_news = []
         social_keywords = ['netizen', 'viral', 'trending', 'socmed', 'X', 'twitter', 'perbincangan', 'ramai']
         noise_keywords = ['edit profil', 'hubungi kami', 'redaksi', 'career', 'iklan', 'disclaimer']
+        
+        # Add irrelevant keywords that might appear for certain tickers
+        # For example: BEST might match "terbaik" (best in Indonesian)
+        irrelevant_keywords = {
+            'BEST': ['game', 'video game', 'gaming', 'juara', 'terbaik 2025', 'award'],
+            'GOOD': ['baik untuk', 'makanan', 'resep'],
+            'NICE': ['bagus untuk', 'tips'],
+            'FAST': ['cepat untuk', 'cara cepat'],
+            'LINK': ['tautan', 'cara link'],
+        }
+        
         social_hits = 0
         
         for src in news_sources:
@@ -390,6 +524,42 @@ def get_news_sentiment(ticker):
                         # --- NOISE FILTER ---
                         if not title or len(title) < 15: continue
                         if any(n in title.lower() for n in noise_keywords): continue
+                        
+                        # --- RELEVANCE VALIDATION ---
+                        # Check if ticker code appears in title (case insensitive)
+                        title_lower = title.lower()
+                        ticker_in_title = clean_ticker.lower() in title_lower
+                        
+                        # Check for stock-related keywords to ensure it's about stocks
+                        stock_keywords = ['saham', 'emiten', 'tbk', 'bursa', 'idx', 'ihsg', 'investor', 'dividen', 'laba', 'rugi', 'kinerja']
+                        has_stock_context = any(kw in title_lower for kw in stock_keywords)
+                        
+                        # Check for irrelevant keywords specific to this ticker
+                        is_irrelevant = False
+                        if clean_ticker in irrelevant_keywords:
+                            is_irrelevant = any(irr in title_lower for irr in irrelevant_keywords[clean_ticker])
+                        
+                        # STRICTER: Check if this is a "list article" mentioning many tickers
+                        # Count how many other common tickers appear in the title
+                        other_tickers = ['BBCA', 'BBRI', 'BMRI', 'TLKM', 'ASII', 'UNVR', 'GOTO', 'BSDE', 'CTRA', 'DMAS', 
+                                       'AKDA', 'KIJA', 'SSIA', 'MTEL', 'ADRO', 'ANTM', 'INCO', 'PTBA', 'SMGR', 'INTP']
+                        ticker_count = sum(1 for t in other_tickers if t.lower() in title_lower and t != clean_ticker)
+                        
+                        # STRICTER: Check position of ticker in title
+                        # If ticker appears only at the end (after comma or "dan"), it's likely a list
+                        ticker_position = title_lower.find(clean_ticker.lower())
+                        title_length = len(title_lower)
+                        is_at_end = ticker_position > (title_length * 0.7) if ticker_position >= 0 else False
+                        
+                        # Reject if:
+                        # 1. More than 2 other tickers mentioned (likely a list article)
+                        # 2. Ticker only appears at the very end of title
+                        if ticker_count > 2 or (ticker_count > 0 and is_at_end):
+                            continue
+                        
+                        # Only accept if: (ticker in title OR has stock context) AND not irrelevant
+                        if not ((ticker_in_title or has_stock_context) and not is_irrelevant):
+                            continue
                         
                         # Fix links
                         if link and not link.startswith('http'):
@@ -462,83 +632,183 @@ def analyze_stock(ticker, hist=None):
     ma5 = hist['Close'].tail(5).mean()
     ma20 = hist['Close'].tail(20).mean()
     
+    # --- ADVANCED INDICATORS (Whale Hunter) ---
+    # 1. RSI
+    rsi_series = calculate_rsi(hist['Close'])
+    rsi = rsi_series.iloc[-1]
+    
+    # 2. Bollinger Bands (20, 2)
+    std20 = hist['Close'].rolling(window=20).std().iloc[-1]
+    bb_upper = ma20 + (std20 * 2)
+    bb_lower = ma20 - (std20 * 2)
+    bb_width = (bb_upper - bb_lower) / ma20 # Volatility measure
+    
+    # 3. OBV (On Balance Volume)
+    hist['OBV'] = calculate_obv(hist)
+    obv_slope = (hist['OBV'].iloc[-1] - hist['OBV'].iloc[-5]) # Simple 5-day slope
+    
     # News Sentiment
-
     
     # Get enhanced news sentiment data (Returns 7 items now)
     sentiment, headline, news_score, social_buzz, impact, news_list, analysis = get_news_sentiment(ticker)
     
-    # 5 Pillars Logic
+    # --- LOGIC DEFINITIONS ---
+    
+    # Existing 5 Pillars Logic
     cond_vol_pbv = (vol_ratio > 1.5) and (pbv < 1.3)
     cond_trend = ma5 > ma20
     cond_big_player = (vol_ratio > 2.0) and (abs(chg_pct) < 4)
-    cond_sentiment = news_score >= 55 or social_buzz >= 65  # Boosted by social too
+    cond_sentiment = news_score >= 55 or social_buzz >= 65
     
+    # --- WHALE HUNTER LOGIC (STRICT PATTERN) ---
+    # 1. Perfect Consolidation (14 Days)
+    # User wants "Tight Base" before flying.
+    if len(hist) >= 14:
+        high_14d = hist['High'].tail(14).max()
+        low_14d = hist['Low'].tail(14).min()
+        range_14d = (high_14d - low_14d) / low_14d * 100
+        
+        # Super Strict: < 6% volatility in 2 weeks
+        is_tight_base = range_14d < 6.0 
+        
+        # Breakout Potential: Price is in upper 40% of the box (Not dumping)
+        cur_price = hist['Close'].iloc[-1]
+        is_near_breakout = cur_price > (low_14d + 0.6 * (high_14d - low_14d))
+    else:
+        is_tight_base = False
+        is_near_breakout = False
+        range_14d = 100
+
+    # 2. Hidden Accumulation (Vol Up, Price Flat)
+    # Relaxed slightly because tight base often has low volume drying up
+    is_accumulation = (vol_ratio > 0.8) and (obv_slope > -2000000)
+    
+    # 3. Relative Strength (vs IHSG if available)
+    is_strong = chg_pct >= -1.0 
+    
+    # 4. Weekly Check
+    is_support = rsi < 70 and rsi > 40
+    
+    # 5. Value Check
+    is_value = pbv < 4.0 and cash_status != "BURUK"
+    
+    # 6. Anti-Hype
+    is_early = news_score < 90
+    
+    # TIER 1: THE "PERFECT PATTERN" (Whale Radar)
+    cond_whale_tier1 = is_tight_base and is_near_breakout and is_accumulation and is_value
+    
+    # TIER 2: POTENTIAL (Wider Base or High Vol)
+    cond_whale_tier2 = (range_14d < 10.0) and (vol_ratio > 1.2) and (rsi > 40)
+
     # Fundamental Health
     roe = info.get('returnOnEquity', 0)
     debt_equity = info.get('debtToEquity', 0)
     
     status = "HOLD"
     final_score = 0
+    
+    # Scoring System
     if cond_trend: final_score += 1
-    if vol_ratio > 1.2: final_score += 1 # Slightly lower threshold for watchlist
+    if vol_ratio > 1.2: final_score += 1 
     if cond_sentiment: final_score += 1
     if cond_big_player: final_score += 1
     
-    if final_score >= 3:
-        status = "🔥 STRONG BUY"
-    elif final_score >= 1: # More inclusive for watchlist
-        status = "✅ WATCHLIST" 
+    # SAFETY CHECK: Is it a trap? (Overheated)
+    is_overheated = (rsi > 75) or (hist['Close'].iloc[-1] > (ma20 * 1.15))
+    
+    # STATUS DETERMINATION
+    if cond_whale_tier1:
+        status = "WHALE ACCUMULATION" # Highest Priority
+    elif cond_whale_tier2 and final_score >= 2:  # Raised from 1 to 2
+        status = "BIG PLAYER ENTRY" # Tier 2
+    elif final_score >= 4:  # Raised from 3 to 4 - ALL pillars must be met
+        if is_overheated:
+            status = "HIGH RISK (Overbought)"
+        else:
+            status = "STRONG BUY"
+    elif final_score >= 2: 
+        status = "WATCHLIST" 
     
     # --- Analisis Riset Mendalam (Bahasa Indonesia) ---
     research_points = []
     
     # Technical Analysis
-    if cond_trend:
-        research_points.append(f"🟢 **Teknikal:** Tren harga menunjukkan pola **Bullish** (MA5 > MA20).")
+    if is_tight_base:
+         research_points.append(f"**Perfect Base:** Harga konsolidasi sangat ketat (**{range_14d:.1f}%**) selama 2 minggu. Siap breakout!")
+    elif cond_trend:
+        research_points.append(f"**Teknikal:** Tren harga menunjukkan pola **Bullish** (MA5 > MA20).")
     else:
-        research_points.append(f"🔴 **Teknikal:** Harga masih dalam fase konsolidasi atau **Bearish**.")
+        research_points.append(f"**Teknikal:** Harga masih dalam fase konsolidasi atau **Bearish**.")
         
     if vol_ratio > 2.0:
-        research_points.append(f"🔥 **Volume:** Terjadi lonjakan volume signifikan (**{vol_ratio:.1f}x**) rata-rata harian.")
+        research_points.append(f"**Volume:** Terjadi lonjakan volume signifikan (**{vol_ratio:.1f}x**) rata-rata harian.")
     elif vol_ratio > 1.2:
-        research_points.append(f"📈 **Volume:** Akumulasi volume mulai meningkat di atas rata-rata.")
+        research_points.append(f"**Volume:** Akumulasi volume mulai meningkat di atas rata-rata.")
         
     # Fundamental Analysis
     if pbv > 0:
         if pbv < 1.0:
-            research_points.append(f"💎 **Valuasi:** Sangat murah dengan **PBV {pbv:.2f}x** (di bawah nilai buku).")
+            research_points.append(f"**Valuasi:** Sangat murah dengan **PBV {pbv:.2f}x** (di bawah nilai buku).")
         elif pbv < 1.5:
-            research_points.append(f"✅ **Valuasi:** Menarik dengan **PBV {pbv:.2f}x**.")
+            research_points.append(f"**Valuasi:** Menarik dengan **PBV {pbv:.2f}x**.")
         else:
-            research_points.append(f"⚠️ **Valuasi:** Mulai premium dengan **PBV {pbv:.2f}x**.")
+            research_points.append(f"**Valuasi:** Mulai premium dengan **PBV {pbv:.2f}x**.")
             
     if roe > 15:
-        research_points.append(f"💰 **Profitabilitas:** Sangat solid dengan **ROE {roe:.1f}%**.")
+        research_points.append(f"**Profitabilitas:** Sangat solid dengan **ROE {roe:.1f}%**.")
     elif roe > 5:
-        research_points.append(f"📊 **Profitabilitas:** Stabil dengan **ROE {roe:.1f}%**.")
+        research_points.append(f"**Profitabilitas:** Stabil dengan **ROE {roe:.1f}%**.")
         
     # Sentiment Analysis
     if news_score >= 70:
-        research_points.append(f"🗞️ **Media:** Sentimen berita sangat optimis (Skor: {news_score}).")
+        research_points.append(f"**Media:** Sentimen berita sangat optimis (Skor: {news_score}).")
     elif news_score >= 55:
-        research_points.append(f"📰 **Media:** Sentimen berita cenderung positif.")
+        research_points.append(f"**Media:** Sentimen berita cenderung positif.")
         
     if social_buzz >= 70:
-        research_points.append(f"🔥 **Sosial:** Buzz publik sangat tinggi, potensi volatilitas ritel.")
+        research_points.append(f"**Sosial:** Buzz publik sangat tinggi, potensi volatilitas ritel.")
+
+    # Whale Insights
+    # Whale Insights
+    if cond_whale_tier1:
+         research_points.append(f"**WHALE RADAR:** Terdeteksi pola 'Tight Base' (Range {range_14d:.1f}%) dengan volume terjaga. Potensi akumulasi sebelum breakout.")
+         research_points.append(f"**Posisi:** Harga berada di area atas konsolidasi (Near Breakout).")
+    elif cond_whale_tier2:
+        research_points.append(f"**Smart Money Loop:** Indikasi awal pembentukan base dengan volume masuk.")
+
+    # High Risk Warning
+    if "HIGH RISK" in status:
+        research_points.append(f"**PERINGATAN:** Harga sudah naik terlalu tinggi (Overcooked). Rawan profit taking/guyuran bandar.")
 
     # Synthesis
-    if status == "🔥 STRONG BUY":
-        analysis = "🚀 **KESIMPULAN PRO:** Emiten ini memiliki konvergensi teknikal dan fundamental yang sangat kuat.\n\n"
-    elif status == "✅ WATCHLIST":
-        analysis = "📋 **KESIMPULAN PRO:** Emiten potensial dengan beberapa sinyal positif yang layak dipantau.\n\n"
+    if status == "WHALE ACCUMULATION":
+        analysis = "PILIHAN PREMIUM\n\n"
+        analysis += "**Terdeteksi fase akumulasi institusi/bandar.** Sangat direkomendasikan untuk entry bertahap (Cicil Beli) karena harga belum 'terbang' & downside risk minim.\n\n"
+        analysis += "---\n\n"
+    elif status == "BIG PLAYER ENTRY":
+        analysis = "POTENSI AKUMULASI\n\n"
+        analysis += "**Terlihat aktivitas volume tidak wajar** yang mengindikasikan entry Big Player, namun volatilitas harga masih agak tinggi. Pantau area support.\n\n"
+        analysis += "---\n\n"
+    elif status == "STRONG BUY":
+        analysis = "KESIMPULAN\n\n"
+        analysis += "**Emiten ini memiliki konvergensi teknikal dan fundamental yang sangat kuat.**\n\n"
+        analysis += "---\n\n"
+    elif status == "WATCHLIST":
+        analysis = "KESIMPULAN\n\n"
+        analysis += "**Emiten potensial** dengan beberapa sinyal positif yang layak dipantau.\n\n"
+        analysis += "---\n\n"
     else:
-        analysis = "⚖️ **KESIMPULAN PRO:** Kondisi pasar saat ini netral untuk emiten ini.\n\n"
+        analysis = "KESIMPULAN\n\n"
+        analysis += "**Kondisi pasar saat ini netral** untuk emiten ini.\n\n"
+        analysis += "---\n\n"
         
-    analysis += "\n".join(research_points)
+    # Add research points with better formatting
+    for point in research_points:
+        analysis += f"{point}\n\n"
     
     if headline:
-        analysis += f"\n\n*Headline Utama:* \"{headline[:60]}...\""
+        analysis += f"---\n\n*Headline Utama:* \"{headline[:80]}...\""
 
     return {
         "Ticker": ticker.replace('.JK', ''),
@@ -566,7 +836,7 @@ def set_ticker(ticker):
     # Update langsung ke key milik selectbox
     st.session_state.ticker_selector = ticker.replace('.JK', '')
     # Force switch to Market Dashboard
-    st.session_state.active_tab = "📈 Market Dashboard"
+    st.session_state.active_tab = "Market Dashboard"
     # Set scroll to top flag
     st.session_state.scroll_to_top = True
 
@@ -638,47 +908,60 @@ if 'ihsg_info_live' not in st.session_state or st.session_state.get('refresh_ihs
 
 # --- UI COMPONENT: SIDEBAR (WATCHLIST ONLY) ---
 with st.sidebar:
-    # Remove default padding & Reduce Top Margin AGGRESSIVELY
+    # Custom Reference CSS
     st.markdown("""
     <style>
-        /* FORCE SIDEBAR TOP ZERO */
-        section[data-testid="stSidebar"] > div {
-            padding-top: 0rem !important;
-        }
-        section[data-testid="stSidebar"] .block-container {
-            padding-top: 1rem !important; /* Some padding needed for inner content */
-            margin-top: -4rem !important;
-        }
-        /* Hide default Streamlit anchors if any */
-        a.anchor-link { display: none !important; }
+        /* Premium Sidebar UI - Reference Style */
+        .wl-ticker { font-weight: 700; font-size: 14px; color: #fff; line-height: 1.2; }
+        .wl-name { font-size: 10px; color: #848e9c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wl-price { font-weight: 700; font-size: 14px; text-align: right; color: #fff; line-height: 1.2; }
+        .wl-chg { font-size: 11px; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 3px; }
+        .up { color: #00c853 !important; }
+        .down { color: #ff5252 !important; }
         
-        /* Specific Fix for "stSidebarUserContent" */
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 0rem !important;
+        /* Sidebar Tab Refinement - KILL ALL GREEN BOXES */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 2px; background-color: transparent !important;
         }
-        /* Header Adjustment */
-        .wl-header {
-             margin-top: -20px !important; 
+        .stTabs [data-baseweb="tab"] {
+            height: 35px; background-color: transparent !important; border: none !important;
+            padding: 0 5px !important; color: #848e9c !important; font-size: 13px !important;
+            transition: all 0.2s; box-shadow: none !important;
         }
-        /* Custom Row Styling */
-        .wl-row {
-            display: flex;
-            align-items: center;
-            padding: 8px 4px;
-            border-radius: 6px;
-            margin-bottom: 2px;
-            transition: background 0.2s;
-            cursor: pointer;
+        .stTabs [aria-selected="true"] {
+            color: #10d35e !important; border-bottom: 2px solid #10d35e !important;
+            background-color: transparent !important; font-weight: 700 !important;
         }
-        /* Header Styling */
-        .wl-header {
-            font-size: 16px;
-            font-weight: 700;
-            color: #e0e0e0;
-            margin-bottom: 10px;
-            margin-top: 10px; /* Adjust this to move Up/Down */
-            display: flex;
-            align-items: center;
+        /* Aggressive strike on Streamlit's internal tab styling */
+        .stTabs [data-baseweb="tab"] > div,
+        .stTabs [data-baseweb="tab"] p,
+        .stTabs [data-baseweb="tab"] span {
+            background-color: transparent !important;
+            background: transparent !important;
+            border: none !important;
+        }
+        
+        /* Ticker Button Reset - PURE TEXT FOR LISTS ONLY */
+        .ticker-btn-wrapper button {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            text-align: left !important;
+            color: #fff !important;
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            box-shadow: none !important;
+            min-height: 0 !important;
+            line-height: 1.2 !important;
+        }
+        .ticker-btn-wrapper button:hover {
+            color: #10d35e !important;
+            background: transparent !important;
+        }
+        
+        /* Row Styling */
+        .wl-row-container {
+            padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
         }
     </style>
     """, unsafe_allow_html=True)
@@ -693,17 +976,17 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     # Action Bar: Search & Refresh
-    s_col1, s_col2 = st.columns([1, 4])
-    with s_col1:
-        if st.button("🔍", help="Cari Emiten"):
+    s_col = st.columns(2)
+    with s_col[0]:
+        if st.button("Search", help="Cari Emiten", use_container_width=True):
             st.session_state.show_search = not st.session_state.show_search
             st.rerun()
-    with s_col2:
-        if st.button("🔄 Refresh Prices", use_container_width=True, type="secondary"):
+    with s_col[1]:
+        if st.button("Refresh", use_container_width=True, type="secondary"):
             clear_watchlist_cache()
             if 'watchlist_data_list' in st.session_state:
                 del st.session_state.watchlist_data_list
-            st.session_state.refresh_ihsg = True # Paksa refresh IHSG juga
+            st.session_state.refresh_ihsg = True 
             st.rerun()
 
     # Search Input (Conditional)
@@ -723,36 +1006,9 @@ with st.sidebar:
     st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
     
     # Tabs for Watchlist / Gainer / Loser
-    tab_wl, tab_gainer, tab_loser = st.tabs(["📋 Watchlist", "📈 Gainer", "📉 Loser"])
+    tab_wl, tab_gainer, tab_loser = st.tabs(["Watchlist", "Gainer", "Loser"])
     
-    # Action Bar (Add, Sort) - Removed Refresh as requested, kept minimal loop structure if needed, or just remove cols
-    # ... logic for watchlist loop continues below ...
-
-    # --- WATCHLIST (CUSTOM ROW COMPONENT) ---
-    # Styles for custom row
-    st.markdown("""
-    <style>
-    /* ... existing styles ... */
-    .wl-row {
-        display: flex;
-        align-items: center;
-        padding: 8px 4px;
-        border-radius: 6px;
-        margin-bottom: 2px;
-        transition: background 0.2s;
-        cursor: pointer;
-    }
-    .wl-row:hover {
-        background-color: #2a2e39;
-    }
-    .wl-ticker { font-weight: 700; font-size: 13px; color: #e0e0e0; }
-    .wl-name { font-size: 10px; color: #848e9c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
-    .wl-price { font-weight: 600; font-size: 13px; text-align: right; }
-    .wl-chg { font-size: 10px; text-align: right; }
-    .up { color: #00c853; }
-    .down { color: #ff5252; }
-    </style>
-    """, unsafe_allow_html=True)
+    # --- WATCHLIST LOGIC ---
 
     # Load from cache or fetch new data
     if 'watchlist_data_list' not in st.session_state:
@@ -762,7 +1018,7 @@ with st.sidebar:
             st.session_state.watchlist_data_list = cached_watchlist
         else:
             # Generate list using Fast Info (Parallel) for Real-time accuracy
-            with st.spinner("📦 Loading Real-time Data..."):
+            with st.spinner("Loading Real-time Data..."):
                 def fetch_ticker_info(t):
                     try:
                         ticker_obj = yf.Ticker(t)
@@ -782,8 +1038,12 @@ with st.sidebar:
 
                         chg_pct = ((current_price - prev_close) / prev_close * 100) if prev_close > 0 else 0
                         
+                        # Get company name
+                        company_name = ticker_obj.info.get('longName', "Emiten Indonesia Tbk")
+                        
                         return {
                             "ticker": t.replace('.JK', ''),
+                            "name": company_name,
                             "price": int(current_price),
                             "chg": chg_pct,
                             "prev": prev_close
@@ -808,7 +1068,7 @@ with st.sidebar:
                         logo = f"https://assets.stockbit.com/logos/companies/{ticker}.png"
                         wl.append({
                             "ticker": ticker,
-                            "name": names_map.get(ticker, "Emiten Indonesia Tbk"),
+                            "name": res['name'],
                             "price": res['price'],
                             "chg": res['chg'],
                             "logo": logo
@@ -817,63 +1077,84 @@ with st.sidebar:
                 st.session_state.watchlist_data_list = wl
                 save_watchlist_cache(wl)
             
-    # Helper for SVG Sparkline
+    # Helper for SVG Sparkline (Premium Reference Style)
     def make_sparkline(data, color):
         if not data: return ""
-        width = 60
-        height = 20
+        width = 80
+        height = 30
         min_y, max_y = min(data), max(data)
-        range_y = max_y - min_y if max_y != min_y else 1
+        # Pad range for visual headroom
+        y_range = max_y - min_y if max_y != min_y else 1
+        min_y -= y_range * 0.1
+        max_y += y_range * 0.1
+        y_range = max_y - min_y
+        
         pts = []
         for i, val in enumerate(data):
             x = (i / (len(data)-1)) * width
-            y = height - ((val - min_y) / range_y) * height
+            y = height - ((val - min_y) / y_range) * height
             pts.append(f"{x},{y}")
         polyline = " ".join(pts)
-        return f'<svg width="{width}" height="{height}"><polyline points="{polyline}" fill="none" stroke="{color}" stroke-width="1.5"/></svg>'
+        
+        # Add a dashed reference line
+        ref_y = height / 2 + 2 
+        
+        return f'''
+        <svg width="{width}" height="{height}" style="overflow:visible;">
+            <line x1="0" y1="{ref_y}" x2="{width}" y2="{ref_y}" stroke="rgba(255,255,255,0.1)" stroke-width="1" stroke-dasharray="2,2" />
+            <polyline points="{polyline}" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        '''
 
     # Render Loop - Watchlist Tab
     with tab_wl:
         for item in st.session_state.watchlist_data_list[:st.session_state.watchlist_limit]:
-            # Layout: [Logo] [Ticker/Name] [Sparkline] [Price/Change]
-            r_col1, r_col2, r_col3, r_col4 = st.columns([0.8, 2, 1.5, 1.8])
+            # Layout: [Logo] [Ticker/Name] [Sparkline] [Price/Chg]
+            r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
             
             with r_col1:
-                # Logo
-                st.image(item['logo'], width=32)
+                # Logo (Circular)
+                st.markdown(f"""
+                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px;">
+                        <img src="{item['logo']}" style="width:100%; height:100%; object-fit:contain;">
+                    </div>
+                """, unsafe_allow_html=True)
                 
             with r_col2:
                 # Ticker & Name 
-                if st.button(f"{item['ticker']}", key=f"btn_wl_{item['ticker']}", use_container_width=True):
+                st.markdown('<div class="ticker-btn-wrapper">', unsafe_allow_html=True)
+                if st.button(item['ticker'], key=f"btn_wl_{item['ticker']}", use_container_width=True):
                     set_ticker(item['ticker'])
-                st.caption(f"{item['name']}")
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown(f"<div class='wl-name' style='margin-top:-15px;'>{item['name']}</div>", unsafe_allow_html=True)
                 
             with r_col3:
                 # Sparkline
-                # Mock a small trend list based on change
                 trend_color = "#00c853" if item['chg'] >= 0 else "#ff5252"
-                # Generate pseudo-random trend for the sparkline visual
                 trend_data = [
-                    item['price'] * (1 - (random.uniform(0, 0.05) if item['chg'] < 0 else -random.uniform(0, 0.05)))
-                    for _ in range(5)
+                    item['price'] * (1 - (random.uniform(0, 0.03) if item['chg'] < 0 else -random.uniform(0, 0.03)))
+                    for _ in range(8)
                 ]
-                trend_data.append(item['price']) # End at current
-                
-                st.markdown(make_sparkline(trend_data, trend_color), unsafe_allow_html=True)
+                trend_data.append(item['price'])
+                st.markdown(f"<div style='margin-top:5px;'>{make_sparkline(trend_data, trend_color)}</div>", unsafe_allow_html=True)
                 
             with r_col4:
                 # Price & Change
-                color_class = "up" if item['chg'] >= 0 else "down"
-                sign = "+" if item['chg'] >= 0 else ""
+                is_up = item['chg'] >= 0
+                color = "#00c853" if is_up else "#ff5252"
+                arrow = "↗" if is_up else "↘"
+                diff = abs(item['price'] * (item['chg']/100))
                 
                 st.markdown(f"""
-                <div style="text-align: right; line-height: 1.2;">
-                    <div style="font-size: 13px; font-weight: 600; color: #e0e0e0;">{item['price']:,}</div>
-                    <div style="font-size: 10px;" class="{color_class}">{sign}{item['chg']:.2f}%</div>
+                <div style="text-align: right; margin-top:2px;">
+                    <div class="wl-price">{item['price']:,}</div>
+                    <div class="wl-chg" style="color:{color};">
+                        {arrow} {int(diff):,} ({item['chg']:.2f}%)
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
-                
-            st.markdown("<div style='margin-bottom: 4px; border-bottom: 1px solid #2a2e39;'></div>", unsafe_allow_html=True)
+            
+            st.markdown("<div style='margin-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,0.03);'></div>", unsafe_allow_html=True)
         
         # Load More Button
         if len(st.session_state.watchlist_data_list) > st.session_state.watchlist_limit:
@@ -891,59 +1172,77 @@ with st.sidebar:
     
     # Gainer Tab
     with tab_gainer:
-        # Sort by highest positive change
         gainers = sorted([i for i in st.session_state.watchlist_data_list if i['chg'] > 0], key=lambda x: x['chg'], reverse=True)[:10]
         for item in gainers:
-            r_col1, r_col2, r_col3, r_col4 = st.columns([0.8, 2, 1.5, 1.8])
+            r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
             with r_col1:
-                st.image(item['logo'], width=32)
+                st.markdown(f"""
+                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px;">
+                        <img src="{item['logo']}" style="width:100%; height:100%; object-fit:contain;">
+                    </div>
+                """, unsafe_allow_html=True)
             with r_col2:
-                if st.button(f"{item['ticker']}", key=f"btn_g_{item['ticker']}", use_container_width=True):
+                st.markdown('<div class="ticker-btn-wrapper">', unsafe_allow_html=True)
+                if st.button(item['ticker'], key=f"btn_g_{item['ticker']}", use_container_width=True):
                     set_ticker(item['ticker'])
-                st.caption(f"{item['name']}")
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown(f"<div class='wl-name' style='margin-top:-15px;'>{item['name']}</div>", unsafe_allow_html=True)
             with r_col3:
                 trend_color = "#00c853"
-                trend_data = [item['price'] * (1 - random.uniform(0, 0.05)) for _ in range(5)]
+                trend_data = [item['price'] * (1 - random.uniform(0, 0.05)) for _ in range(8)]
                 trend_data.append(item['price'])
-                st.markdown(make_sparkline(trend_data, trend_color), unsafe_allow_html=True)
+                st.markdown(f"<div style='margin-top:5px;'>{make_sparkline(trend_data, trend_color)}</div>", unsafe_allow_html=True)
             with r_col4:
+                diff = abs(item['price'] * (item['chg']/100))
                 st.markdown(f"""
-                <div style="text-align: right; line-height: 1.2;">
-                    <div style="font-size: 13px; font-weight: 600; color: #e0e0e0;">{item['price']:,}</div>
-                    <div style="font-size: 10px; color: #00c853;">+{item['chg']:.2f}%</div>
+                <div style="text-align: right; margin-top:2px;">
+                    <div class="wl-price">{item['price']:,}</div>
+                    <div class="wl-chg" style="color:#00c853;">
+                        ↗ {int(diff):,} ({item['chg']:.2f}%)
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
-            st.markdown("<div style='margin-bottom: 4px; border-bottom: 1px solid #2a2e39;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,0.03);'></div>", unsafe_allow_html=True)
     
     # Loser Tab
     with tab_loser:
-        # Sort by change (lowest first) - show bottom 10 regardless of positive/negative
         losers = sorted(st.session_state.watchlist_data_list, key=lambda x: x['chg'])[:10]
         if not losers:
             st.info("🔎 No data available")
         for item in losers:
-            r_col1, r_col2, r_col3, r_col4 = st.columns([0.8, 2, 1.5, 1.8])
+            r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
             with r_col1:
-                st.image(item['logo'], width=32)
-            with r_col2:
-                if st.button(f"{item['ticker']}", key=f"btn_l_{item['ticker']}", use_container_width=True):
-                    set_ticker(item['ticker'])
-                st.caption(f"{item['name']}")
-            with r_col3:
-                trend_color = "#ff5252" if item['chg'] < 0 else "#00c853"
-                trend_data = [item['price'] * (1 + random.uniform(0, 0.05)) for _ in range(5)]
-                trend_data.append(item['price'])
-                st.markdown(make_sparkline(trend_data, trend_color), unsafe_allow_html=True)
-            with r_col4:
-                color_class = "up" if item['chg'] >= 0 else "down"
-                sign = "+" if item['chg'] >= 0 else ""
                 st.markdown(f"""
-                <div style="text-align: right; line-height: 1.2;">
-                    <div style="font-size: 13px; font-weight: 600; color: #e0e0e0;">{item['price']:,}</div>
-                    <div style="font-size: 10px;" class="{color_class}">{sign}{item['chg']:.2f}%</div>
+                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px;">
+                        <img src="{item['logo']}" style="width:100%; height:100%; object-fit:contain;">
+                    </div>
+                """, unsafe_allow_html=True)
+            with r_col2:
+                st.markdown('<div class="ticker-btn-wrapper">', unsafe_allow_html=True)
+                if st.button(item['ticker'], key=f"btn_l_{item['ticker']}", use_container_width=True):
+                    set_ticker(item['ticker'])
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown(f"<div class='wl-name' style='margin-top:-15px;'>{item['name']}</div>", unsafe_allow_html=True)
+            with r_col3:
+                is_up = item['chg'] >= 0
+                trend_color = "#00c853" if is_up else "#ff5252"
+                trend_data = [item['price'] * (1 + (random.uniform(0, 0.05) if not is_up else -random.uniform(0, 0.05))) for _ in range(8)]
+                trend_data.append(item['price'])
+                st.markdown(f"<div style='margin-top:5px;'>{make_sparkline(trend_data, trend_color)}</div>", unsafe_allow_html=True)
+            with r_col4:
+                is_up = item['chg'] >= 0
+                color = "#00c853" if is_up else "#ff5252"
+                arrow = "↗" if is_up else "↘"
+                diff = abs(item['price'] * (item['chg']/100))
+                st.markdown(f"""
+                <div style="text-align: right; margin-top:2px;">
+                    <div class="wl-price">{item['price']:,}</div>
+                    <div class="wl-chg" style="color:{color};">
+                        {arrow} {int(diff):,} ({item['chg']:.2f}%)
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
-            st.markdown("<div style='margin-bottom: 4px; border-bottom: 1px solid #2a2e39;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,0.03);'></div>", unsafe_allow_html=True)
 
 
         
@@ -956,8 +1255,7 @@ def render_ticker_tape(watchlist):
     items_html = ""
     for item in watchlist[:12]:
         color_class = "up" if item['chg'] >= 0 else "down"
-        arrow = "▲" if item['chg'] >= 0 else "▼"
-        items_html += f'<div class="ticker__item">{item["ticker"]} <span class="{color_class}">{arrow} {item["price"]:,}</span></div>'
+        items_html += f'<div class="ticker__item">{item["ticker"]} <span class="{color_class}">{item["price"]:,}</span></div>'
     
     # Duplicate for infinite loop
     items_html += items_html
@@ -1011,7 +1309,7 @@ if 'watchlist_data_list' in st.session_state:
 else:
     # Fallback to static if no watchlist data yet
     st.markdown("""<div class="ticker-wrap"><div class="ticker">
-      <div class="ticker__item">BBCA <span class="up">▲ 10,100</span></div><div class="ticker__item">BBRI <span class="down">▼ 4,800</span></div>
+      <div class="ticker__item">BBCA <span class="up">10,100</span></div><div class="ticker__item">BBRI <span class="down">4,800</span></div>
     </div></div>""", unsafe_allow_html=True)
 
 
@@ -1028,7 +1326,7 @@ if ihsg_data:
     ihsg_c = f"{ihsg_data['change']:+.2f}"
     ihsg_pct = f"{ihsg_data['percent']:+.2f}%"
     ihsg_color = "#00c853" if ihsg_data['change'] >= 0 else "#ff5252"
-    ihsg_trend = "↗" if ihsg_data['change'] >= 0 else "↘"
+    ihsg_trend = "" 
     market_sentiment = "POSITIVE" if ihsg_data['change'] >= 0 else "NEGATIVE"
     sentiment_bg = "rgba(0, 200, 83, 0.1)" if ihsg_data['change'] >= 0 else "rgba(255, 82, 82, 0.1)"
     sentiment_color = "#00c853" if ihsg_data['change'] >= 0 else "#ff5252"
@@ -1037,22 +1335,26 @@ else:
     ihsg_c = "-12.45"
     ihsg_pct = "-0.17%"
     ihsg_color = "#ff5252"
-    ihsg_trend = "↘"
+    ihsg_trend = ""
     market_sentiment = "NEUTRAL"
     sentiment_bg = "rgba(255, 255, 255, 0.05)"
     sentiment_color = "#848e9c"
 
 header_html = f"""
-<div style="background: rgba(30, 34, 45, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; margin-top: -12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+<div class="main-header" style="background: rgba(30, 34, 45, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; margin-top: -12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
     <div style="display: flex; align-items: center; gap: 12px;">
         <img src="{logo_url}" onerror="this.style.display='none'" style="width: 36px; height: 36px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 4px;" alt="{current_symbol}">
         <div style="display: flex; flex-direction: column; gap: 2px;">
             <span style="font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.5px; line-height: 1;">{current_symbol}</span>
-            <span style="font-size: 11px; color: #848e9c; font-weight: 500;">JKSE • STOCK</span>
+            <span style="font-size: 11px; color: #848e9c; font-weight: 500;">JKSE | STOCK</span>
         </div>
         <span style="background: rgba(0, 200, 83, 0.1); color: #00c853; padding: 5px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; border: 1px solid rgba(0, 200, 83, 0.2); letter-spacing: 0.5px; margin-left: 8px;">MARKET OPEN</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 20px;">
+    <div class="header-right" style="display: flex; align-items: center; gap: 20px;">
+        <!-- BACK TO SCANNER BUTTON - Specific to current ticker card -->
+        <a href="#card-{current_symbol}" style="text-decoration: none; background: rgba(255, 255, 255, 0.05); color: #848e9c; padding: 8px 16px; border-radius: 4px; font-size: 11px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.2s; display: flex; align-items: center; gap: 6px;">
+            Kembali ke {current_symbol}
+        </a>
         <div style="text-align: right;">
             <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 2px;">IHSG Index {ihsg_trend}</div>
             <div style="font-size: 16px; font-weight: 700; color: #fff;">{ihsg_p} <span style="color: {ihsg_color}; font-size: 12px; margin-left: 4px;">{ihsg_c} ({ihsg_pct})</span></div>
@@ -1068,10 +1370,21 @@ header_html = f"""
 st.markdown(header_html, unsafe_allow_html=True)
 
 
-# Main Content Tabs
-tab_chart, tab_financials = st.tabs(["🔥 Chart", "📊 Financial statement"])
+# Main Content Tabs - PERSISTENT
+main_tabs_options = ["Chart", "Financial statement"]
+if 'main_active_tab' not in st.session_state or st.session_state.main_active_tab not in main_tabs_options:
+    st.session_state.main_active_tab = "Chart"
 
-with tab_chart:
+main_active_tab = st.radio(
+    "Main Content Tabs",
+    main_tabs_options,
+    horizontal=True,
+    key="main_active_tab",
+    label_visibility="collapsed"
+)
+
+
+if main_active_tab == "Chart":
     # Layout: Chart on Left, Order Book on Right
     c_chart, c_orderbook = st.columns([3, 1])
 
@@ -1335,7 +1648,7 @@ with tab_chart:
 """, unsafe_allow_html=True)
         
         # --- PRO RUNNING TRADE ---
-        st.markdown("<div style='margin-top: 15px; font-weight: 700; font-size: 14px;'>Running Trade ↗</div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 15px; font-weight: 700; font-size: 14px;'>Running Trade</div>", unsafe_allow_html=True)
         
         # Build Trade Rows HTML (Flattened)
         rt_rows_html = ""
@@ -1365,6 +1678,7 @@ with tab_chart:
 """, unsafe_allow_html=True)
 
     # --- MARKET SCREENER & AI ANALYSIS ---
+    st.markdown('<div id="scanner-results"></div>', unsafe_allow_html=True)
     st.write("")
     st.markdown("### Market Screener & AI Analysis")
 
@@ -1399,10 +1713,19 @@ with tab_chart:
     # Logic triggered by Sidebar Button or Local Button
     if st.session_state.get('run_screener', False):
         st.session_state.run_screener = False # Reset trigger
-        with st.spinner(f'🚀 Memulai Adaptive Scanning ({len(TICKERS)} emiten)...'):
+        
+        # Show Full Screen Overlay
+        loading_placeholder = st.empty()
+        loading_placeholder.markdown(custom_loading_overlay("LOADING..."), unsafe_allow_html=True)
+        
+        # Artificial delay for cool effect (Game feel)
+        time.sleep(1.5)
+        
+        try:
+            loading_placeholder.markdown(custom_loading_overlay("LOADING..."), unsafe_allow_html=True)
             # PHASE 1: Batch Download Historical Data (Extremely Fast)
             try:
-                all_hist = yf.download(TICKERS, period="1mo", group_by='ticker', threads=True, progress=False)
+                all_hist = yf.download(TICKERS, period="3mo", group_by='ticker', threads=True, progress=False)
             except:
                 all_hist = {}
 
@@ -1412,6 +1735,11 @@ with tab_chart:
             
             p_bar = st.progress(0, text="Menyaring emiten potensial...")
             for i, t in enumerate(TICKERS):
+                # Update overlay progress
+                prog_pct = int((i + 1) / len(TICKERS) * 100)
+                if i % 3 == 0 or i == len(TICKERS) - 1: # Update every 3 items
+                    loading_placeholder.markdown(custom_loading_overlay(f"LOADING... ({t})", progress=prog_pct), unsafe_allow_html=True)
+                
                 try:
                     hist = all_hist[t] if isinstance(all_hist, pd.DataFrame) and t in all_hist.columns.levels[0] else None
                     if hist is not None and not hist.empty and len(hist) >= 20:
@@ -1420,8 +1748,20 @@ with tab_chart:
                         curr_vol = hist['Volume'].iloc[-1]
                         avg_vol = hist['Volume'].mean()
                         
-                        # Criteria: Trend UP or Volume Spike
-                        if ma5 > ma20 or curr_vol > (avg_vol * 1.5):
+                        # Criteria: STRICTER - Need at least 2 out of 3 conditions
+                        # STRICT FILTERING: We only want stocks with REAL potential
+                        cond_trend = (ma5 > ma20) and (hist['Close'].iloc[-1] > ma20) # Valid Trend
+                        cond_vol = curr_vol > (avg_vol * 1.5) # Significant Volume (raised from 1.3)
+                        
+                        # Check for tight range in last 5 days (Initial crude check)
+                        range_crude = (hist['High'].tail(5).max() - hist['Low'].tail(5).min()) / hist['Low'].tail(5).min() * 100
+                        cond_tight = range_crude < 4.0 # Stricter Tightness (lowered from 5.0)
+                        
+                        # Count how many conditions are met
+                        conditions_met = sum([cond_trend, cond_vol, cond_tight])
+                        
+                        # Pass if: At least 2 out of 3 conditions met (STRICTER)
+                        if conditions_met >= 2:
                             promising_tickers.append(t)
                 except:
                     continue
@@ -1446,6 +1786,10 @@ with tab_chart:
                         res = future.result()
                         if res:
                             final_results.append(res)
+                        
+                        # Update overlay for deep analysis
+                        prog_deep = int((idx + 1) / len(promising_tickers) * 100)
+                        loading_placeholder.markdown(custom_loading_overlay(f"DEEP ANALYSIS {idx+1}/{len(promising_tickers)}", progress=prog_deep), unsafe_allow_html=True)
                         p_bar_deep.progress((idx + 1) / len(promising_tickers))
                     p_bar_deep.empty()
                 results = final_results
@@ -1460,80 +1804,238 @@ with tab_chart:
                 st.warning("No data fetched or no match found.")
                 st.session_state.scan_results = None
 
+        except Exception as e:
+            st.error(f"Scanner Error: {str(e)}")
+            
+        finally:
+            # Clear overlay
+            loading_placeholder.empty()
+
     # Display Logic
     if st.session_state.scan_results is not None:
         df = st.session_state.scan_results
         
-        # Tabs for Result View
-        tab_picks, tab_grid, tab_table = st.tabs(["� Top Picks", "🔲 All Potential", "📋 Table View"])
+        # --- NEW: RESULT SEARCH FILTER (WITH SUBMIT BUTTON) ---
+        st.markdown("### Filter Hasil")
+        
+        # Use form to prevent auto-filtering on every keystroke
+        with st.form(key="search_form", clear_on_submit=False):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                result_search = st.text_input(
+                    "search_input",
+                    placeholder="Ketik kode saham", 
+                    label_visibility="collapsed",
+                    key="search_query"
+                )
+            with col2:
+                search_submitted = st.form_submit_button("Cari", use_container_width=True)
+        
+        # Only filter if form is submitted or search query exists
+        if result_search and (search_submitted or result_search):
+            # Filter DataFrame
+            search_term = result_search.lower()
+            df = df[
+                df['Ticker'].str.lower().str.contains(search_term) | 
+                df['Status'].str.lower().str.contains(search_term) |
+                df['Analysis'].str.lower().str.contains(search_term)
+            ]
+            st.caption(f"Menampilkan {len(df)} hasil pencarian untuk '{result_search}'.")
+        
+        # Prepare filtered lists to get counts
+        potential_list = [r for i, r in df.iterrows() if r['Status'] != 'HOLD']
+        watchlist_list = [r for i, r in df.iterrows() if 'WATCHLIST' in r['Status']]
+        top_picks_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['STRONG BUY', 'WHALE', 'BIG PLAYER'])]
+        
+        # Tabs for Result View - Using radio for persistence
+        result_tab_options = [
+            f"All Potential ({len(potential_list)})", 
+            f"Watchlist ({len(watchlist_list)})", 
+            f"Top Picks ({len(top_picks_list)})", 
+            "Table View"
+        ]
+        
+        # Sync current tab with potentially new labels
+        if 'active_result_tab' not in st.session_state:
+            st.session_state.active_result_tab = result_tab_options[0]
+        else:
+            # Try to keep the same tab category even if count changes
+            current_category = st.session_state.active_result_tab.split(' (')[0]
+            new_tab_match = [opt for opt in result_tab_options if opt.startswith(current_category)]
+            if new_tab_match:
+                st.session_state.active_result_tab = new_tab_match[0]
+            else:
+                st.session_state.active_result_tab = result_tab_options[0]
+
+        # Tab selector with radio buttons
+        st.markdown("---")
+        active_tab = st.radio(
+            "Pilih Tampilan:",
+            result_tab_options,
+            horizontal=True,
+            key="active_result_tab",
+            label_visibility="collapsed"
+        )
         
         def render_stock_grid(rows, key_prefix):
             if not rows:
-                st.info("🔎 Belum ada emiten yang memenuhi kriteria ini.")
+                st.info("Belum ada emiten yang memenuhi kriteria ini.")
                 return
             
             cols = st.columns(3)
             for idx, row in enumerate(rows):
                 with cols[idx % 3]:
+                    # Add unique ID for anchor navigation
+                    st.markdown(f'<div id="card-{row["Ticker"]}"></div>', unsafe_allow_html=True)
+                    
                     with st.container(border=True):
-                        st.markdown(f"### {row['Ticker']} — Rp {row['Price']:,}")
-                        if 'STRONG BUY' in row['Status']: 
-                            st.markdown("🔥 **STRONG BUY**")
-                        else: 
-                            st.markdown("✅ **WATCHLIST**")
+                        # 1. Header: Ticker & Price (Minimalist)
+                        h_col1, h_col2 = st.columns([2, 1])
+                        with h_col1:
+                            ticker_clean = row['Ticker'].replace('.JK', '')
+                            # Add Logo next to ticker
+                            logo_url = f"https://assets.stockbit.com/logos/companies/{ticker_clean}.png"
+                            st.markdown(f"""
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="width:24px; height:24px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05);">
+                                        <img src="{logo_url}" style="width:100%; height:100%; object-fit:contain;">
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 700; font-size: 14px; color: #e0e0e0; line-height: 1;">{ticker_clean}</div>
+                                        <div style="font-size: 10px; color: #848e9c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">{row.get('Name', '')}</div>
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            st.markdown(f"<span style='font-size: 18px; font-weight: 800; color: #fff;'>Rp {row['Price']:,}</span>", unsafe_allow_html=True)
+                        with h_col2:
+                            # Status (Plain Text)
+                            st.markdown(f"<div style='text-align: right; font-size: 11px; font-weight: 700; color: #848e9c; margin-top: 5px;'>{row['Status']}</div>", unsafe_allow_html=True)
+
+                        # 2. Key Metrics Card (Responsive Grid)
+                        st.markdown(f"""
+                            <div class="metrics-grid">
+                                <div class="metric-item">
+                                    <span class="metric-label">Trend</span>
+                                    <span class="metric-value">{row['MA Trend']}</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Vol</span>
+                                    <span class="metric-value">{row['Raw Vol Ratio']:.1f}x</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">PBV</span>
+                                    <span class="metric-value">{row['Raw PBV']:.2f}x</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">ROE</span>
+                                    <span class="metric-value">{row.get('ROE', 0):.1f}%</span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                        # 3. Pulse Indicators (Text Only)
+                        st.markdown(f"""
+                            <div style="display: flex; gap: 15px; margin-top: 10px; margin-bottom: 5px;">
+                                <div style="font-size: 10px; color: #848e9c;">MEDIA PULSE: <span style="color:#00c853;">{row['News Score']}%</span></div>
+                                <div style="font-size: 10px; color: #848e9c;">SOCIAL BUZZ: <span style="color:#2962ff;">{row['Social Buzz']}%</span></div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                        # 4. Summary & Progressive Disclosure
+                        analysis_title = row['Analysis'].split('\n')[0] if row['Analysis'] else "Analysis"
+                        st.markdown(f"<div style='margin-top: 15px; font-weight: 700; color: #e0e0e0;'>{analysis_title}</div>", unsafe_allow_html=True)
                         
-                        st.markdown(f"<div style='font-size: 11px; margin-bottom: 2px; color: #848e9c;'>Media Pulse: <span style='color: #fff;'>{row['News Score']}%</span></div>", unsafe_allow_html=True)
-                        st.progress(row['News Score'] / 100.0)
-                        
-                        st.markdown(f"<div style='font-size: 11px; margin-bottom: 2px; margin-top: 5px; color: #848e9c;'>Social Buzz: <span style='color: #fff;'>{row['Social Buzz']}%</span></div>", unsafe_allow_html=True)
-                        st.progress(row['Social Buzz'] / 100.0)
-                        st.markdown("---")
-                        
-                        k1, k2, k3 = st.columns(3)
-                        k1.metric("Trend", row['MA Trend'])
-                        k2.metric("Vol", f"{row['Raw Vol Ratio']:.1f}x")
-                        k3.metric("PBV", f"{row['Raw PBV']:.2f}x")
-                        
-                        # Financial Summary Row (ROE Only)
-                        row_roe = row.get('ROE', 0)
-                        st.markdown(f"<div style='text-align: center; margin-top: -5px;'><span style='font-size: 11px; color: #848e9c;'>ROE:</span> <span style='font-size: 11px; font-weight: 700; color: #fff;'>{row_roe:.1f}%</span></div>", unsafe_allow_html=True)
-                        
-                        st.markdown("---")
-                        st.markdown(row['Analysis'])
-                        
-                        with st.expander("📰 Lihat Berita & Research"):
+                        with st.expander("Detail Riset & Berita"):
+                            # The full detailed bullet points
+                            st.markdown(row['Analysis'])
+                            st.markdown("---")
                             if row['News List']:
                                 for news in row['News List']:
-                                    # Format tanggal berita agar lebih menonjol
-                                    date_str = news.get('date', 'Baru saja')
-                                    st.markdown(f"**🕒 {date_str}** | _Sumber: {news.get('source')}_")
-                                    link = news.get('link', '#')
-                                    st.markdown(f"👉 [{news.get('title')}]({link})")
+                                    st.markdown(f"**{news.get('date', 'Baru')}** | {news.get('source')}")
+                                    st.markdown(f"[{news.get('title')}]({news.get('link', '#')})")
                                     st.markdown("---")
-                            else: st.write("-")
+                            else: st.caption("Tidak ada berita spesifik hari ini.")
                         
-                        st.button(f"📈 Load", key=f"btn_{key_prefix}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
+                        st.button(f"Load Chart", key=f"btn_{key_prefix}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
 
-        with tab_picks:
-            # Filter for STRONG BUY only
-            picks = [r for i, r in df.iterrows() if 'STRONG BUY' in r['Status']]
-            render_stock_grid(picks, "picks")
 
-        with tab_grid:
-            # Filter for all potential (excluding HOLD)
-            potential = [r for i, r in df.iterrows() if r['Status'] != 'HOLD']
-            render_stock_grid(potential, "all")
+        # Render content based on active tab
+        if active_tab.startswith("All Potential"):
+            render_stock_grid(potential_list, "all")
 
-        with tab_table:
+        elif active_tab.startswith("Watchlist"):
+            render_stock_grid(watchlist_list, "watchlist")
+
+        elif active_tab.startswith("Top Picks"):
+            render_stock_grid(top_picks_list, "picks")
+
+        elif active_tab == "Table View":
+            # --- PROFESSIONAL TABLE UX ---
+            st.markdown("""
+            <style>
+                /* Dataframe header styling */
+                [data-testid="stDataFrameResizable"] th {
+                    background-color: #2a2e39 !important;
+                    color: #848e9c !important;
+                }
+            </style>
+            """, unsafe_allow_html=True)
+            
             st.dataframe(
                 df, 
                 use_container_width=True,
-                column_order=["Ticker", "Status", "Price", "Change %", "Vol Ratio", "Sentiment Score", "Headline"],
-                height=400
+                column_order=["Ticker", "Status", "Price", "Change %", "Raw Vol Ratio", "News Score", "Social Buzz", "Headline"],
+                column_config={
+                    "Ticker": st.column_config.TextColumn(
+                        "Ticker", 
+                        width="small",
+                        help="Kode Saham Emiten"
+                    ),
+                    "Status": st.column_config.TextColumn(
+                        "Signal Status", 
+                        width="medium",
+                        help="Hasil Analisis Algoritma"
+                    ),
+                    "Price": st.column_config.NumberColumn(
+                        "Price (IDR)", 
+                        format="Rp %d",
+                        help="Harga Terakhir"
+                    ),
+                    "Change %": st.column_config.NumberColumn(
+                        "Change", 
+                        format="%.2f%%",
+                        help="Perubahan Harian"
+                    ),
+                    "Raw Vol Ratio": st.column_config.NumberColumn(
+                        "Vol Ratio", 
+                        format="%.1fx",
+                        help="Rasio Volume vs Rata-rata 20 Hari"
+                    ),
+                    "News Score": st.column_config.ProgressColumn(
+                        "Media Sentiment", 
+                        min_value=0, 
+                        max_value=100, 
+                        format="%d",
+                        help="Sentimen Berita (0-100)"
+                    ),
+                    "Social Buzz": st.column_config.ProgressColumn(
+                        "Social Buzz", 
+                        min_value=0, 
+                        max_value=100, 
+                        format="%d",
+                        help="Intensitas Pembicaraan Publik (0-100)"
+                    ),
+                    "Headline": st.column_config.TextColumn(
+                        "Latest News", 
+                        width="large"
+                    ),
+                },
+                hide_index=True,
+                height=600
             )
 
-with tab_financials:
-    st.markdown(f"### 📊 Laporan Financial Perusahaan: {current_symbol}")
+elif main_active_tab == "Financial statement":
+    st.markdown(f"### Laporan Financial Perusahaan: {current_symbol}")
     
     # Try fetching real data via yfinance
     try:
@@ -1552,7 +2054,7 @@ with tab_financials:
             return annual_df.reindex(sorted(annual_df.columns, reverse=True), axis=1), latest_annual_date, " (Annual)"
 
         # 1. Neraca (Balance Sheet)
-        st.markdown("#### 🏦 1. Neraca (Balance Sheet)")
+        st.markdown("#### 1. Neraca (Balance Sheet)")
         bs, latest_date_bs, bs_type = get_latest_financials(yf_ticker.balance_sheet, yf_ticker.quarterly_balance_sheet)
         
         if bs is not None:
@@ -1573,7 +2075,7 @@ with tab_financials:
             st.warning("Data Neraca tidak tersedia.")
 
         # 2. Income Statement
-        st.markdown("#### 📈 2. Income Statement")
+        st.markdown("#### 2. Income Statement")
         is_stmt, latest_date_is, is_type = get_latest_financials(yf_ticker.income_stmt, yf_ticker.quarterly_income_stmt)
         
         if is_stmt is not None:
@@ -1594,7 +2096,7 @@ with tab_financials:
             st.warning("Data Income Statement tidak tersedia.")
 
         # 3. Cashflow Statement
-        st.markdown("#### 💵 3. Cashflow Statement")
+        st.markdown("#### 3. Cashflow Statement")
         cf, latest_date_cf, cf_type = get_latest_financials(yf_ticker.cashflow, yf_ticker.quarterly_cashflow)
         
         if cf is not None:
@@ -1608,21 +2110,21 @@ with tab_financials:
             c2.metric("Free Cash Flow", f"Rp {fcf/1e12:.2f} T" if fcf != 0 else "-")
             
             # Decision: Good or Bad
-            status_kas = "BAIK ✅" if fcf > 0 and ocf > 0 else "BURUK ⚠️"
-            color_kas = "#00c853" if status_kas == "BAIK ✅" else "#ff5252"
+            status_kas = "BAIK" if fcf > 0 and ocf > 0 else "BURUK"
+            color_kas = "#00c853" if status_kas == "BAIK" else "#ff5252"
             
+            with st.expander("Detail Arus Kas"):
+                st.dataframe(cf.T.head(4), use_container_width=True)
+
             st.markdown(f"""
             <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border-left: 5px solid {color_kas}; margin-top: 10px;">
                 <span style="font-size: 14px; font-weight: 600; color: #848e9c;">KESIMPULAN KAS:</span><br>
                 <span style="font-size: 20px; font-weight: 800; color: {color_kas};">Laporan Kas ini sedang {status_kas}</span>
                 <p style="font-size: 12px; color: #d1d4dc; margin-top: 5px;">
-                    {'Perusahaan memiliki arus kas operasional positif dan mampu menghasilkan free cash flow.' if status_kas == 'BAIK ✅' else 'Perusahaan mengalami kesulitan dalam menghasilkan arus kas bebas atau operasional yang positif.'}
+                    {'Perusahaan memiliki arus kas operasional positif dan mampu menghasilkan free cash flow.' if status_kas == 'BAIK' else 'Perusahaan mengalami kesulitan dalam menghasilkan arus kas bebas atau operasional yang positif.'}
                 </p>
             </div>
             """, unsafe_allow_html=True)
-            
-            with st.expander("Detail Arus Kas"):
-                st.dataframe(cf.T.head(4), use_container_width=True)
         else:
             st.warning("Data Cashflow tidak tersedia.")
             
