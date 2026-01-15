@@ -639,116 +639,109 @@ def analyze_stock(ticker, hist=None):
     chg_pct = ((curr_price - prev_close) / prev_close) * 100
     
     curr_vol = hist['Volume'].iloc[-1]
-    avg_vol = hist['Volume'].mean()
+    avg_vol = hist['Volume'].tail(20).mean()
     vol_ratio = curr_vol / avg_vol if avg_vol > 0 else 0
+    
+    # Financial Value Flow (Estimate)
+    value_flow = curr_price * curr_vol
     
     ma5 = hist['Close'].tail(5).mean()
     ma20 = hist['Close'].tail(20).mean()
+    ma50 = hist['Close'].tail(50).mean()
     
     # --- ADVANCED INDICATORS (Whale Hunter) ---
-    # 1. RSI
     rsi_series = calculate_rsi(hist['Close'])
     rsi = rsi_series.iloc[-1]
     
-    # 2. Bollinger Bands (20, 2)
-    std20 = hist['Close'].rolling(window=20).std().iloc[-1]
-    bb_upper = ma20 + (std20 * 2)
-    bb_lower = ma20 - (std20 * 2)
-    bb_width = (bb_upper - bb_lower) / ma20 # Volatility measure
-    
-    # 3. OBV (On Balance Volume)
-    hist['OBV'] = calculate_obv(hist)
-    obv_slope = (hist['OBV'].iloc[-1] - hist['OBV'].iloc[-5]) # Simple 5-day slope
-    
     # News Sentiment
+    sentiment, headline, news_score, social_buzz, impact, news_list, sentiment_analysis = get_news_sentiment(ticker)
     
-    # Get enhanced news sentiment data (Returns 7 items now)
-    sentiment, headline, news_score, social_buzz, impact, news_list, analysis = get_news_sentiment(ticker)
+    # Fundamental Data
+    roe = info.get('returnOnEquity', 0)
+    debt_equity = info.get('debtToEquity', 0)
+    if debt_equity and debt_equity > 0:
+        debt_equity = debt_equity / 100 
     
-    # --- 5 PILLARS LOGIC REFINEMENT ---
+    # --- 5 PILLARS LOGIC REFINEMENT (HIGH QUALITY ONLY) ---
     
-    # Pillar 1: Undervalue
-    is_undervalue = pbv < 1.2 and pbv > 0
+    # Pillar 1: High Quality Fundamental
+    is_high_roe = roe > 0.12 # ROE > 12%
+    is_healthy_debt = debt_equity < 2.0 # DER < 2.0
+    is_undervalue = pbv < 1.5 and pbv > 0
     
-    # Pillar 2: Buzz (Much discussed)
-    is_hot = news_score >= 65 or social_buzz >= 70
+    # Pillar 2: Trend Alignment
+    is_trend_up = (ma5 > ma20) and (ma20 > ma50) and (curr_price > ma20)
     
-    # Pillar 3: Volume Rise + Undervalue
-    is_accum_undervalue = vol_ratio > 1.5 and is_undervalue
+    # Pillar 3: Volume Intensity (Smart Money)
+    # Require at least 500M IDR value flow for meaningful "Big Player" status
+    is_meaningful_flow = value_flow > 500_000_000 
+    is_big_volume = vol_ratio > 2.5
     
-    # Pillar 4: Big Player Entry
-    is_big_player = (vol_ratio > 2.5) and (abs(chg_pct) < 5)
+    # Pillar 4: Risk Check (Over-extended)
+    is_overextended = curr_price > (ma20 * 1.15) # Price 15% above MA20
+    
+    # Pillar 5: Sentiment
+    is_positive_sentiment = news_score >= 65 or social_buzz >= 75
     
     # Status Determination
     status = "HOLD"
-    if is_big_player and is_undervalue:
+    
+    # TOP QUALITY: WHALE ACCUMULATION (Trend + Value + Quality)
+    if is_trend_up and is_undervalue and is_high_roe and is_meaningful_flow:
         status = "WHALE ACCUMULATION"
-    elif is_big_player:
-        status = "BIG PLAYER ENTRY"
-    elif is_hot and is_undervalue:
+    
+    # TOP QUALITY: STRONG BUY (Quality + Sentiment + Trend)
+    elif is_trend_up and is_high_roe and is_healthy_debt and is_positive_sentiment:
         status = "STRONG BUY"
-    elif is_undervalue or is_hot or vol_ratio > 1.5:
+        
+    # BIG PLAYER ENTRY (Volume + Trend)
+    elif is_big_volume and is_trend_up and is_meaningful_flow:
+        status = "BIG PLAYER ENTRY"
+        
+    # WATCHLIST (Basic Potential)
+    elif is_trend_up or (is_undervalue and is_high_roe):
         status = "WATCHLIST"
     
-    # Override for overheated
-    if (rsi > 75) and "STRONG" in status:
-        status = "HIGH RISK (Overbought)" 
+    # RISK OVERRIDE
+    if is_overextended or rsi > 78:
+        status = "HIGH RISK (Overextended)"
     
     # --- Analisis Riset Mendalam (Bahasa Indonesia) ---
     research_points = []
     
     # Technical Analysis
-    if is_big_player:
-         research_points.append(f"**Big Player Entry:** Terdeteksi akumulasi volume signifikan (**{vol_ratio:.1f}x**) yang mengindikasikan masuknya 'Smart Money'.")
-    elif vol_ratio > 1.5:
-        research_points.append(f"**Volume Spike:** Aktivitas transaksi meningkat di atas rata-rata harian.")
-    else:
-        research_points.append(f"**Teknikal:** Harga sedang dalam fase konsolidasi.")
+    if is_trend_up:
+        research_points.append(f"**Trend Jangka Menengah:** Konfirmasi Bullish (MA5 > MA20 > MA50). Harga bergerak stabil di atas rata-rata.")
+    
+    if is_big_volume:
+         research_points.append(f"**Aktivitas Volume:** Spike volume **{vol_ratio:.1f}x** dengan perputaran nilai **Rp {value_flow/1e6:.1f} Juta**.")
         
     # Fundamental Analysis
-    if is_undervalue:
-        research_points.append(f"**Undervalue:** Harga masih sangat menarik dengan **PBV {pbv:.2f}x** (di bawah nilai buku atau rata-rata industri).")
-    elif pbv > 0:
-        research_points.append(f"**Valuasi:** Harga wajar dengan **PBV {pbv:.2f}x**.")
-            
-    # ROE Logic (if available)
-    roe = info.get('returnOnEquity', 0)
-    if roe > 0.15:
-        research_points.append(f"**Profitabilitas:** Fundamental solid dengan **ROE {roe*100:.1f}%**.")
+    if is_high_roe:
+        research_points.append(f"**High Quality Profitability:** Emiten memiliki efisiensi modal yang sangat baik (**ROE {roe*100:.1f}%**).")
+    
+    if is_healthy_debt:
+        research_points.append(f"**Rasio Utang:** Struktur modal sehat (**DER {debt_equity:.2f}x**), risiko kebangkrutan rendah.")
         
-    # Sentiment Analysis (Pillar 5)
-    if news_score >= 70:
-        research_points.append(f"**Sentimen Fresh:** Berita terbaru menunjukkan dukungan kuat terhadap prospek emiten.")
-    elif is_hot:
-        research_points.append(f"**Buzz:** Menjadi pembicaraan hangat di kalangan investor/media.")
+    if is_undervalue:
+        research_points.append(f"**Valuasi Terdiskon:** Harga masih tergolong murah dibanding nilai asetnya (**PBV {pbv:.2f}x**).")
+            
+        
 
-    # High Risk Warning
-    if "HIGH RISK" in status:
-        research_points.append(f"**PERINGATAN:** RSI menunjukkan kondisi Overbought ({rsi:.1f}). Rawan koreksi teknikal.")
 
-    # Synthesis
+    # Synthesis Construction
+    analysis = f"HASIL SCAN: {status}\n\n"
     if status == "WHALE ACCUMULATION":
         analysis = "PILIHAN PREMIUM\n\n"
         analysis += "**Terdeteksi fase akumulasi institusi/bandar.** Sangat direkomendasikan untuk entry bertahap (Cicil Beli) karena harga belum 'terbang' & downside risk minim.\n\n"
-        analysis += "---\n\n"
-    elif status == "BIG PLAYER ENTRY":
-        analysis = "POTENSI AKUMULASI\n\n"
-        analysis += "**Terlihat aktivitas volume tidak wajar** yang mengindikasikan entry Big Player, namun volatilitas harga masih agak tinggi. Pantau area support.\n\n"
-        analysis += "---\n\n"
     elif status == "STRONG BUY":
         analysis = "KESIMPULAN\n\n"
         analysis += "**Emiten ini memiliki konvergensi teknikal dan fundamental yang sangat kuat.**\n\n"
-        analysis += "---\n\n"
-    elif status == "WATCHLIST":
-        analysis = "KESIMPULAN\n\n"
-        analysis += "**Emiten potensial** dengan beberapa sinyal positif yang layak dipantau.\n\n"
-        analysis += "---\n\n"
-    else:
-        analysis = "KESIMPULAN\n\n"
-        analysis += "**Kondisi pasar saat ini netral** untuk emiten ini.\n\n"
-        analysis += "---\n\n"
-        
-    # Add research points with better formatting
+    elif status == "BIG PLAYER ENTRY":
+        analysis = "POTENSI AKUMULASI\n\n"
+        analysis += "**Terlihat aktivitas volume tidak wajar** mengindikasikan entry Big Player, namun volatilitas harga masih agak tinggi.\n\n"
+    
+    analysis += "---\n\n"
     for point in research_points:
         analysis += f"{point}\n\n"
     
@@ -771,7 +764,7 @@ def analyze_stock(ticker, hist=None):
         "ROE": roe * 100 if roe else 0,
         "DER": debt_equity if debt_equity else 0,
         "Status": status,
-        "MA Trend": "UP" if cond_trend else "DOWN",
+        "MA Trend": "STRONG UP" if is_trend_up else ("UP" if ma5 > ma20 else "SIDEWAYS"),
         "News List": news_list,
         "Headline": headline
     }
@@ -793,22 +786,43 @@ if st.session_state.collapse_sidebar:
     components.html(
         """
         <script>
-            var windowParent = window.parent;
-            // More robust collapse for mobile
-            var sidebar = windowParent.document.querySelector('section[data-testid="stSidebar"]');
-            if (sidebar && windowParent.innerWidth <= 768) {
-                var isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
-                if (isExpanded) {
-                    var buttons = windowParent.document.querySelectorAll('button');
-                    for (var i = 0; i < buttons.length; i++) {
-                        // Look for the "Close" or "X" button which appears on mobile when sidebar is open
-                        if (buttons[i].getAttribute('aria-label') === 'Close sidebar') {
-                            buttons[i].click();
-                            break;
+            function tryCollapse() {
+                var doc = window.parent.document;
+                var sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+                
+                // Breaking point: 1024px to cover tablets and narrow windows
+                if (sidebar && window.parent.innerWidth <= 1024) {
+                    var isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
+                    if (isExpanded) {
+                        // 1. Try official data-testid
+                        var btn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]');
+                        if (btn) {
+                            btn.click();
+                            return true;
+                        }
+                        
+                        // 2. Fallback: Search for any button with Close/Collapse label
+                        var buttons = doc.querySelectorAll('button');
+                        for (var i = 0; i < buttons.length; i++) {
+                            var label = (buttons[i].getAttribute('aria-label') || "").toLowerCase();
+                            if (label.includes('close') || label.includes('collapse')) {
+                                buttons[i].click();
+                                return true;
+                            }
                         }
                     }
                 }
+                return false;
             }
+
+            // Aggressive attempt logic: try multiple times over 1.5 seconds
+            var attempts = 0;
+            var interval = setInterval(function() {
+                if (tryCollapse() || attempts > 10) {
+                    clearInterval(interval);
+                }
+                attempts++;
+            }, 150);
         </script>
         """,
         height=0
@@ -970,7 +984,7 @@ with st.sidebar:
             "Cari Kode Saham:",
             options=[t.replace('.JK', '') for t in TICKERS],
             index=None,
-            placeholder="Ketik kode (misal: BBCA)...",
+            placeholder="Cari",
             label_visibility="collapsed"
         )
         if search_ticker:
@@ -1315,6 +1329,17 @@ else:
     sentiment_bg = "rgba(255, 255, 255, 0.05)"
     sentiment_color = "#848e9c"
 
+# Check if market is open (Monday-Friday only)
+import datetime
+current_day = datetime.datetime.now().weekday()  # 0=Monday, 6=Sunday
+is_weekday = current_day < 5  # Monday to Friday
+
+market_status_html = ""
+if is_weekday:
+    market_status_html = '<span style="background: rgba(0, 200, 83, 0.1); color: #00c853; padding: 5px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; border: 1px solid rgba(0, 200, 83, 0.2); letter-spacing: 0.5px; margin-left: 8px;">MARKET OPEN</span>'
+else:
+    market_status_html = '<span style="background: rgba(255, 82, 82, 0.1); color: #ff5252; padding: 5px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; border: 1px solid rgba(255, 82, 82, 0.2); letter-spacing: 0.5px; margin-left: 8px;">MARKET CLOSED</span>'
+
 header_html = f"""
 <div class="main-header" style="background: rgba(30, 34, 45, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; margin-top: -12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
     <div style="display: flex; align-items: center; gap: 12px;">
@@ -1323,7 +1348,7 @@ header_html = f"""
             <span style="font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.5px; line-height: 1;">{current_symbol}</span>
             <span style="font-size: 11px; color: #848e9c; font-weight: 500;">JKSE | STOCK</span>
         </div>
-        <span style="background: rgba(0, 200, 83, 0.1); color: #00c853; padding: 5px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; border: 1px solid rgba(0, 200, 83, 0.2); letter-spacing: 0.5px; margin-left: 8px;">MARKET OPEN</span>
+        {market_status_html}
     </div>
     <div class="header-right" style="display: flex; align-items: center; gap: 20px;">
         <!-- BACK TO SCANNER BUTTON - Specific to current ticker card -->
@@ -1706,7 +1731,7 @@ if main_active_tab == "Chart":
 
             # PHASE 2: Tier 1 Filtering (Technical Filter)
             promising_tickers = []
-            results = [] # To store minimal data for non-promising ones if we want, but usually we just skip
+            results = [] 
             
             p_bar = st.progress(0, text="Menyaring emiten potensial...")
             for i, t in enumerate(TICKERS):
@@ -1716,27 +1741,43 @@ if main_active_tab == "Chart":
                     loading_placeholder.markdown(custom_loading_overlay(f"LOADING... ({t})", progress=prog_pct), unsafe_allow_html=True)
                 
                 try:
-                    hist = all_hist[t] if isinstance(all_hist, pd.DataFrame) and t in all_hist.columns.levels[0] else None
-                    if hist is not None and not hist.empty and len(hist) >= 20:
-                        ma5 = hist['Close'].tail(5).mean().iloc[0] if isinstance(hist['Close'].tail(5).mean(), pd.Series) else hist['Close'].tail(5).mean()
-                        ma20 = hist['Close'].tail(20).mean().iloc[0] if isinstance(hist['Close'].tail(20).mean(), pd.Series) else hist['Close'].tail(20).mean()
+                    # Safely check if ticker exists in downloaded data
+                    hist = None
+                    if isinstance(all_hist, pd.DataFrame) and not all_hist.empty:
+                        # Check if multi-level columns exist
+                        if hasattr(all_hist.columns, 'levels'):
+                            if t in list(all_hist.columns.levels[0]):
+                                hist = all_hist[t]
+                        elif t in all_hist.columns:
+                            hist = all_hist[[t]]
+                    
+                    if hist is not None and not hist.empty and len(hist) >= 50:
+                        # Calculate needed Indicators
+                        close_prices = hist['Close']
+                        ma5 = close_prices.tail(5).mean()
+                        ma20 = close_prices.tail(20).mean()
+                        ma50 = close_prices.tail(50).mean()
+                        
                         curr_vol = hist['Volume'].iloc[-1]
-                        avg_vol = hist['Volume'].mean()
+                        avg_vol = hist['Volume'].tail(20).mean() # 20-day average volume
                         
-                        # Criteria: STRICTER - Need at least 2 out of 3 conditions
-                        # STRICT FILTERING: We only want stocks with REAL potential
-                        cond_trend = (ma5 > ma20) and (hist['Close'].iloc[-1] > ma20) # Valid Trend
-                        cond_vol = curr_vol > (avg_vol * 1.5) # Significant Volume (raised from 1.3)
+                        # --- RELAXED FILTERING FOR BETTER WATCHLIST VISIBILITY ---
+                        # 1. Trend: Bullish alignment
+                        cond_trend = (ma5 > ma20) and (ma20 > ma50) and (close_prices.iloc[-1] > ma20)
                         
-                        # Check for tight range in last 5 days (Initial crude check)
+                        # 2. Volume: At least 1.5x average volume (Lowered from 2.0x)
+                        cond_vol = curr_vol > (avg_vol * 1.5) 
+                        
+                        # 3. Tightness: Detect consolidation
                         range_crude = (hist['High'].tail(5).max() - hist['Low'].tail(5).min()) / hist['Low'].tail(5).min() * 100
-                        cond_tight = range_crude < 4.0 # Stricter Tightness (lowered from 5.0)
+                        cond_tight = range_crude < 4.5 # Relaxed from 3.5%
                         
-                        # Count how many conditions are met
-                        conditions_met = sum([cond_trend, cond_vol, cond_tight])
-                        
-                        # Pass if: At least 2 out of 3 conditions met (STRICTER)
-                        if conditions_met >= 2:
+                        # Pass if Trend is good AND (Volume is decent OR Price is consolidating)
+                        # This ensures "Watchlist" items (early move) are captured
+                        if cond_trend and (cond_vol or cond_tight):
+                            promising_tickers.append(t)
+                        # Special Case: Ultra tight consolidation even if trend is just starting
+                        elif range_crude < 2.5:
                             promising_tickers.append(t)
                 except:
                     continue
@@ -1746,14 +1787,23 @@ if main_active_tab == "Chart":
             
             # PHASE 3: Tier 2 Deep Dive (Parallel for promising ones ONLY)
             if promising_tickers:
-                st.info(f"Menemukan {len(promising_tickers)} emiten potensial. Melakukan analisis mendalam...")
+                total_technical = len(promising_tickers)
+                st.info(f"Menemukan {total_technical} emiten potensial secara teknikal. Melakukan Quality Check...")
                 final_results = []
                 # Optimasi: Tingkatkan max_workers dari 15 ke 25
                 with ThreadPoolExecutor(max_workers=25) as executor:
                     # Optimasi: Kirim data historis yang sudah ada (hist) ke analyze_stock
                     futures = {}
                     for t in promising_tickers:
-                        t_hist = all_hist[t] if isinstance(all_hist, pd.DataFrame) and t in all_hist.columns.levels[0] else None
+                        # Safely extract historical data for this ticker
+                        t_hist = None
+                        if isinstance(all_hist, pd.DataFrame) and not all_hist.empty:
+                            if hasattr(all_hist.columns, 'levels'):
+                                if t in list(all_hist.columns.levels[0]):
+                                    t_hist = all_hist[t]
+                            elif t in all_hist.columns:
+                                t_hist = all_hist[[t]]
+                        
                         futures[executor.submit(analyze_stock, t, t_hist)] = t
                     
                     p_bar_deep = st.progress(0)
@@ -1772,9 +1822,19 @@ if main_active_tab == "Chart":
             if results:
                 st.session_state.scan_results = pd.DataFrame(results)
                 st.session_state.last_update = time.strftime("%H:%M WIB")
+                
+                # Hitung hasil akhir vs filter teknikal
+                final_df = st.session_state.scan_results
+                high_quality_count = len(final_df[final_df['Status'] != 'HOLD'])
+                filtered_out = total_technical - high_quality_count
+                
                 # Save to cache
                 save_cached_results(st.session_state.scan_results, st.session_state.last_update)
-                st.success(f"Scan Completed. Found {len(st.session_state.scan_results[st.session_state.scan_results['Status'] != 'HOLD'])} potential assets.")
+                
+                msg = f"Scan Completed. Found {high_quality_count} High-Quality assets."
+                if filtered_out > 0:
+                    msg += f" ({filtered_out} assets filtered by Quality Check)"
+                st.success(msg)
             else:
                 st.warning("No data fetched or no match found.")
                 st.session_state.scan_results = None
@@ -1939,13 +1999,10 @@ if main_active_tab == "Chart":
         # Render content based on active tab
         if active_tab.startswith("All"):
             render_stock_grid(watchlist_list + exclusive_hot_list, "all")
-
-        elif active_tab.startswith("Watchlist"):
-            render_stock_grid(watchlist_list, "watchlist")
-
-        elif active_tab.startswith("Top Picks"):
-            render_stock_grid(exclusive_hot_list, "picks")
-            # --- PROFESSIONAL TABLE UX ---
+            
+            # --- PROFESSIONAL TABLE UX IN ALL TAB ---
+            st.markdown("---")
+            st.markdown("### 📊 Tabel Detail Semua Emiten")
             st.markdown("""
             <style>
                 /* Dataframe header styling */
@@ -1957,7 +2014,7 @@ if main_active_tab == "Chart":
             """, unsafe_allow_html=True)
             
             st.dataframe(
-                df, 
+                df[df['Status'] != 'HOLD'], 
                 use_container_width=True,
                 column_order=["Ticker", "Status", "Price", "Change %", "Raw Vol Ratio", "News Score", "Social Buzz", "Headline"],
                 column_config={
@@ -2009,73 +2066,774 @@ if main_active_tab == "Chart":
                 height=600
             )
 
-elif main_active_tab == "Professional Analyst Advisor":
-    st.markdown(f"## 🎩 Penasehat Analis Professional")
+        elif active_tab.startswith("Watchlist"):
+            render_stock_grid(watchlist_list, "watchlist")
+
+        elif active_tab.startswith("Top Picks"):
+            render_stock_grid(exclusive_hot_list, "picks")
+
+elif main_active_tab == "Financial statement":
+    st.markdown("## Laporan Keuangan")
     st.markdown("---")
     
-    col_a1, col_a2 = st.columns([1, 1])
-    
-    with col_a1:
-        query = st.text_input("Konsultasi Emiten:", placeholder="Ketik Kode Saham (misal: ZINC, BBCA)...", key="advisor_query")
-        ask_btn = st.button("Tanya Analis", use_container_width=True, type="primary")
+    try:
+        yf_ticker = yf.Ticker(current_symbol + ".JK")
+        info = yf_ticker.info
         
+        # Company Info Header
+        col_info1, col_info2 = st.columns([2, 1])
+        with col_info1:
+            st.markdown(f"### {info.get('longName', current_symbol)}")
+            st.caption(f"**Sektor:** {info.get('sector', 'N/A')} | **Industri:** {info.get('industry', 'N/A')}")
+        with col_info2:
+            market_cap = info.get('marketCap', 0)
+            if market_cap > 0:
+                if market_cap >= 1e12:
+                    market_cap_str = f"Rp {market_cap/1e12:.2f}T"
+                elif market_cap >= 1e9:
+                    market_cap_str = f"Rp {market_cap/1e9:.2f}B"
+                else:
+                    market_cap_str = f"Rp {market_cap/1e6:.2f}M"
+                st.metric("Market Cap", market_cap_str)
+        
+        st.markdown("---")
+        
+        # Key Financial Metrics
+        st.markdown("### Metrik Keuangan Utama")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            current_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
+            previous_close = info.get('previousClose', 0)
+            change_pct = ((current_price - previous_close) / previous_close * 100) if previous_close > 0 else 0
+            st.metric(
+                "Harga Saham",
+                f"Rp {current_price:,.0f}",
+                f"{change_pct:+.2f}%"
+            )
+        
+        with col2:
+            pe_ratio = info.get('trailingPE', 0)
+            st.metric(
+                "P/E Ratio",
+                f"{pe_ratio:.2f}x" if pe_ratio > 0 else "N/A",
+                help="Price to Earnings Ratio"
+            )
+        
+        with col3:
+            pbv = info.get('priceToBook', 0)
+            st.metric(
+                "P/BV Ratio",
+                f"{pbv:.2f}x" if pbv > 0 else "N/A",
+                help="Price to Book Value Ratio"
+            )
+        
+        with col4:
+            dividend_yield = info.get('dividendYield', 0)
+            st.metric(
+                "Dividend Yield",
+                f"{dividend_yield*100:.2f}%" if dividend_yield > 0 else "N/A"
+            )
+        
+        st.markdown("---")
+        
+        # Profitability Metrics
+        st.markdown("### Profitabilitas")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            roe = info.get('returnOnEquity', 0)
+            roe_color = "normal" if roe <= 0 else ("inverse" if roe < 0.10 else "off")
+            st.metric(
+                "ROE",
+                f"{roe*100:.2f}%" if roe > 0 else "N/A",
+                help="Return on Equity - Efisiensi menghasilkan profit dari ekuitas",
+                delta_color=roe_color
+            )
+        
+        with col2:
+            roa = info.get('returnOnAssets', 0)
+            st.metric(
+                "ROA",
+                f"{roa*100:.2f}%" if roa > 0 else "N/A",
+                help="Return on Assets - Efisiensi menghasilkan profit dari aset"
+            )
+        
+        with col3:
+            profit_margin = info.get('profitMargins', 0)
+            st.metric(
+                "Profit Margin",
+                f"{profit_margin*100:.2f}%" if profit_margin > 0 else "N/A",
+                help="Net Profit Margin"
+            )
+        
+        with col4:
+            operating_margin = info.get('operatingMargins', 0)
+            st.metric(
+                "Operating Margin",
+                f"{operating_margin*100:.2f}%" if operating_margin > 0 else "N/A"
+            )
+        
+        st.markdown("---")
+        
+        # Financial Health
+        st.markdown("### Kesehatan Keuangan")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            current_ratio = info.get('currentRatio', 0)
+            st.metric(
+                "Current Ratio",
+                f"{current_ratio:.2f}x" if current_ratio > 0 else "N/A",
+                help="Kemampuan membayar kewajiban jangka pendek"
+            )
+        
+        with col2:
+            debt_to_equity = info.get('debtToEquity', 0)
+            if debt_to_equity and debt_to_equity > 0:
+                debt_to_equity = debt_to_equity / 100
+            st.metric(
+                "Debt to Equity",
+                f"{debt_to_equity:.2f}x" if debt_to_equity > 0 else "N/A",
+                help="Rasio utang terhadap ekuitas"
+            )
+        
+        with col3:
+            quick_ratio = info.get('quickRatio', 0)
+            st.metric(
+                "Quick Ratio",
+                f"{quick_ratio:.2f}x" if quick_ratio > 0 else "N/A",
+                help="Kemampuan membayar kewajiban tanpa menjual inventori"
+            )
+        
+        with col4:
+            total_cash = info.get('totalCash', 0)
+            if total_cash > 0:
+                if total_cash >= 1e12:
+                    cash_str = f"Rp {total_cash/1e12:.2f}T"
+                elif total_cash >= 1e9:
+                    cash_str = f"Rp {total_cash/1e9:.2f}B"
+                else:
+                    cash_str = f"Rp {total_cash/1e6:.2f}M"
+                st.metric("Total Cash", cash_str)
+            else:
+                st.metric("Total Cash", "N/A")
+        
+        st.markdown("---")
+        
+        # Revenue & Earnings
+        st.markdown("### Pendapatan & Laba")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            total_revenue = info.get('totalRevenue', 0)
+            revenue_growth = info.get('revenueGrowth', 0)
+            if total_revenue > 0:
+                if total_revenue >= 1e12:
+                    revenue_str = f"Rp {total_revenue/1e12:.2f}T"
+                elif total_revenue >= 1e9:
+                    revenue_str = f"Rp {total_revenue/1e9:.2f}B"
+                else:
+                    revenue_str = f"Rp {total_revenue/1e6:.2f}M"
+                st.metric(
+                    "Total Revenue (TTM)",
+                    revenue_str,
+                    f"{revenue_growth*100:+.2f}%" if revenue_growth != 0 else None
+                )
+            else:
+                st.metric("Total Revenue (TTM)", "N/A")
+        
+        with col2:
+            net_income = info.get('netIncomeToCommon', 0)
+            earnings_growth = info.get('earningsGrowth', 0)
+            if net_income > 0:
+                if net_income >= 1e12:
+                    income_str = f"Rp {net_income/1e12:.2f}T"
+                elif net_income >= 1e9:
+                    income_str = f"Rp {net_income/1e9:.2f}B"
+                else:
+                    income_str = f"Rp {net_income/1e6:.2f}M"
+                st.metric(
+                    "Net Income (TTM)",
+                    income_str,
+                    f"{earnings_growth*100:+.2f}%" if earnings_growth != 0 else None
+                )
+            else:
+                st.metric("Net Income (TTM)", "N/A")
+        
+        st.markdown("---")
+        
+        # Additional Info
+        st.markdown("### Informasi Tambahan")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Karyawan:**")
+            employees = info.get('fullTimeEmployees', 'N/A')
+            st.write(f"{employees:,}" if isinstance(employees, int) else employees)
+            
+            st.markdown("**Alamat:**")
+            address = info.get('address1', 'N/A')
+            city = info.get('city', '')
+            country = info.get('country', '')
+            st.write(f"{address}, {city}, {country}")
+        
+        with col2:
+            st.markdown("**Kontak:**")
+            phone = info.get('phone', 'N/A')
+            st.write(phone)
+            
+            st.markdown("**Website:**")
+            website = info.get('website', 'N/A')
+            if website != 'N/A':
+                st.markdown(f"[{website}]({website})")
+            else:
+                st.write(website)
+        
+        # Business Summary
+        st.markdown("---")
+        st.markdown("### Deskripsi Bisnis")
+        business_summary = info.get('longBusinessSummary', 'Tidak ada deskripsi tersedia.')
+        st.write(business_summary)
+        
+    except Exception as e:
+        st.error(f"Gagal memuat data keuangan: {str(e)}")
+        st.info("Tip: Pastikan kode saham yang dipilih valid dan memiliki data keuangan yang tersedia.")
+
+elif main_active_tab == "Professional Analyst Advisor":
+    st.markdown(f"## Penasehat Analis Professional")
+    st.caption("Tanyakan apapun tentang saham dan dapatkan penjelasan berdasarkan analisis teknikal & fundamental.")
+    st.markdown("---")
+    
+    # Initialize chat history
+    if 'advisor_chat_history' not in st.session_state:
+        st.session_state.advisor_chat_history = []
+    
+    # Query Input - Compact Layout
+    q_col1, q_col2 = st.columns([4, 1])
+    with q_col1:
+        query = st.text_input(
+            "Cari Kode Saham (contoh: BBCA, IHSG)", 
+            placeholder="Ketik kode...", 
+            key="advisor_query",
+            label_visibility="collapsed"
+        )
+    with q_col2:
+        ask_btn = st.button("Tanya Analis", use_container_width=True, type="primary")
+    
     if ask_btn and query:
         ticker_query = query.upper().strip()
-        if not ticker_query.endswith(".JK"):
-            ticker_query += ".JK"
+        
+        # Map IHSG query
+        if ticker_query == "IHSG":
+            ticker_query = "^JKSE"
             
-        with st.spinner(f"Menganalisis {ticker_query}..."):
-            data = analyze_stock(ticker_query)
+        # Check if query is a ticker code or a general question
+        is_ticker_query = len(ticker_query.split()) == 1 and not any(word in ticker_query.lower() for word in ['apa', 'kenapa', 'bagaimana', 'kapan', 'dimana', 'berapa', '^'])
+        
+        if ticker_query == "^JKSE": 
+            is_ticker_query = True
             
-            if data:
-                st.markdown(f"### Analisis Untuk: {data['Name']} ({data['Ticker']})")
+        if is_ticker_query:
+            # Ticker-specific analysis
+            if not ticker_query.endswith(".JK") and not ticker_query.startswith("^"):
+                ticker_query += ".JK"
                 
-                # Logic for "Bagus Nggak?"
-                score = data['News Score']
-                status = data['Status']
+            with st.spinner(f"Menganalisis {ticker_query}..."):
+                data = analyze_stock(ticker_query)
                 
-                recommendation = "LAYAK BELI" if "BUY" in status or "WHALE" in status else ("PANTAU (WATCHLIST)" if "WATCHLIST" in status else "TUNGGU (HOLD)")
-                rec_color = "#00c853" if "LAYAK" in recommendation else ("#2962ff" if "PANTAU" in recommendation else "#ff5252")
-                
-                st.markdown(f"""
-                <div style="background: {rec_color}22; border: 1px solid {rec_color}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                    <div style="font-size: 14px; color: #848e9c; font-weight: 600;">REKOMENDASI ANALIS:</div>
-                    <div style="font-size: 28px; font-weight: 800; color: {rec_color};">{recommendation}</div>
-                    <div style="font-size: 14px; color: #d1d4dc; margin-top: 10px;">Status Sistem: <b>{status}</b></div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                with st.container(border=True):
-                    st.markdown("#### 📝 Mengapa?")
-                    st.write(data['Analysis'])
+                if data:
+                    # Store in chat history
+                    st.session_state.advisor_chat_history.append({
+                        'type': 'ticker_analysis',
+                        'query': query,
+                        'data': data
+                    })
                     
-                st.markdown("#### 🚀 Potensi Ke Depan (Forecast)")
-                st.info("Berdasarkan akumulasi volume dan pola teknikal, emiten ini menunjukkan potensi kenaikan sebesar **8-15%** dalam jangka pendek jika menembus area resistance terdekat.")
-                
-                # Mock Forecast Visualization
-                st.markdown(f"""
-                <div style="background: #1e222d; padding: 15px; border-radius: 4px; border: 1px solid #2a2e39;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                        <span>Target Price 1:</span> <span style="color:#00c853; font-weight:700;">{int(data['Price']*1.1):,}</span>
+                    st.markdown(f"### Analisis Untuk: {data['Name']} ({data['Ticker'].replace('.JK', '')})")
+                    
+                    # Get stock data for detailed analysis
+                    try:
+                        yf_ticker = yf.Ticker(ticker_query)
+                        hist = yf_ticker.history(period="3mo")
+                        info = yf_ticker.info
+                        
+                        # Calculate technical indicators
+                        current_price = data['Price']
+                        ma5 = hist['Close'].tail(5).mean()
+                        ma20 = hist['Close'].tail(20).mean()
+                        ma50 = hist['Close'].tail(50).mean() if len(hist) >= 50 else ma20
+                        
+                        # RSI calculation (simplified)
+                        delta = hist['Close'].diff()
+                        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                        rs = gain / loss
+                        rsi = 100 - (100 / (1 + rs))
+                        current_rsi = rsi.iloc[-1] if not rsi.empty else 50
+                        
+                        # Volume analysis
+                        avg_volume = hist['Volume'].mean()
+                        current_volume = hist['Volume'].iloc[-1]
+                        volume_ratio = current_volume / avg_volume
+                        
+                        # Price change
+                        price_change_1d = ((current_price - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100) if len(hist) >= 2 else 0
+                        price_change_1w = ((current_price - hist['Close'].iloc[-5]) / hist['Close'].iloc[-5] * 100) if len(hist) >= 5 else 0
+                        price_change_1m = ((current_price - hist['Close'].iloc[-20]) / hist['Close'].iloc[-20] * 100) if len(hist) >= 20 else 0
+                        
+                    except:
+                        current_rsi = 50
+                        volume_ratio = 1.0
+                        price_change_1d = 0
+                        price_change_1w = 0
+                        price_change_1m = 0
+                        ma5 = current_price
+                        ma20 = current_price
+                        ma50 = current_price
+                    
+                    # Recommendation Logic
+                    score = data['News Score']
+                    status = data['Status']
+                    
+                    recommendation = "LAYAK BELI" if "BUY" in status or "WHALE" in status else ("PANTAU (WATCHLIST)" if "WATCHLIST" in status else "TUNGGU (HOLD)")
+                    rec_color = "#00c853" if "LAYAK" in recommendation else ("#2962ff" if "PANTAU" in recommendation else "#ff5252")
+                    
+                    # Display Recommendation
+                    st.markdown(f"""
+                    <div style="background: {rec_color}22; border: 1px solid {rec_color}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <div style="font-size: 14px; color: #848e9c; font-weight: 600;">REKOMENDASI ANALIS:</div>
+                        <div style="font-size: 28px; font-weight: 800; color: {rec_color};">{recommendation}</div>
+                        <div style="font-size: 14px; color: #d1d4dc; margin-top: 10px;">Status Sistem: <b>{status}</b></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                        <span>Target Price 2:</span> <span style="color:#00c853; font-weight:700;">{int(data['Price']*1.25):,}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between;">
-                        <span>Stop Loss:</span> <span style="color:#ff5252; font-weight:700;">{int(data['Price']*0.92):,}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            else:
-                st.error("Emiten tidak ditemukan atau data tidak mencukupi. Pastikan kode saham benar (misal: ZINC, BBCA).")
+                    """, unsafe_allow_html=True)
+                    
+                    # Technical Analysis Section
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.markdown("#### 📈 Analisis Teknikal")
+                        
+                        # Trend Analysis
+                        trend = "BULLISH ↗️" if ma5 > ma20 > ma50 else ("BEARISH ↘️" if ma5 < ma20 < ma50 else "SIDEWAYS ↔️")
+                        trend_color = "#00c853" if "BULLISH" in trend else ("#ff5252" if "BEARISH" in trend else "#ffa726")
+                        
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; color: #848e9c;">Trend:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {trend_color};">{trend}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # RSI
+                        rsi_status = "Overbought" if current_rsi > 70 else ("Oversold" if current_rsi < 30 else "Netral")
+                        rsi_color = "#ff5252" if current_rsi > 70 else ("#00c853" if current_rsi < 30 else "#ffa726")
+                        
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; color: #848e9c;">RSI (14):</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {rsi_color};">{current_rsi:.1f} - {rsi_status}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Volume
+                        vol_status = "Tinggi" if volume_ratio > 1.5 else ("Normal" if volume_ratio > 0.8 else "Rendah")
+                        vol_color = "#00c853" if volume_ratio > 1.5 else ("#ffa726" if volume_ratio > 0.8 else "#ff5252")
+                        
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 11px; color: #848e9c;">Volume:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {vol_color};">{volume_ratio:.2f}x - {vol_status}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown("#### 💰 Analisis Fundamental")
+                        
+                        # PBV
+                        pbv = data.get('Raw PBV', 0)
+                        pbv_status = "Undervalued" if pbv < 1.5 else ("Fair" if pbv < 3.0 else "Overvalued")
+                        pbv_color = "#00c853" if pbv < 1.5 else ("#ffa726" if pbv < 3.0 else "#ff5252")
+                        
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; color: #848e9c;">PBV:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {pbv_color};">{pbv:.2f}x - {pbv_status}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # ROE
+                        roe = data.get('ROE', 0)
+                        roe_status = "Excellent" if roe > 15 else ("Good" if roe > 10 else "Weak")
+                        roe_color = "#00c853" if roe > 15 else ("#ffa726" if roe > 10 else "#ff5252")
+                        
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; color: #848e9c;">ROE:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {roe_color};">{roe:.1f}% - {roe_status}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Sentiment
+                        sentiment_score = data.get('News Score', 0)
+                        sentiment_status = "Positif" if sentiment_score > 60 else ("Netral" if sentiment_score > 40 else "Negatif")
+                        sentiment_color = "#00c853" if sentiment_score > 60 else ("#ffa726" if sentiment_score > 40 else "#ff5252")
+                        
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 11px; color: #848e9c;">Sentimen Berita:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {sentiment_color};">{sentiment_score}% - {sentiment_status}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col3:
+                        st.markdown("#### 📊 Performa Harga")
+                        
+                        # 1 Day Change
+                        change_1d_color = "#00c853" if price_change_1d > 0 else "#ff5252"
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; color: #848e9c;">1 Hari:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {change_1d_color};">{price_change_1d:+.2f}%</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # 1 Week Change
+                        change_1w_color = "#00c853" if price_change_1w > 0 else "#ff5252"
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; color: #848e9c;">1 Minggu:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {change_1w_color};">{price_change_1w:+.2f}%</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # 1 Month Change
+                        change_1m_color = "#00c853" if price_change_1m > 0 else "#ff5252"
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 11px; color: #848e9c;">1 Bulan:</div>
+                            <div style="font-size: 16px; font-weight: 700; color: {change_1m_color};">{price_change_1m:+.2f}%</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+                    
+                    # Detailed Analysis
+                    with st.container(border=True):
+                        st.markdown("#### 📝 Penjelasan Lengkap")
+                        
+                        # Generate comprehensive explanation
+                        explanation = f"""
+**Analisis Teknikal:**
 
-    # Always show chart if a query was made
-    if 'advisor_ticker' not in st.session_state: st.session_state.advisor_ticker = "ZINC"
-    if query: st.session_state.advisor_ticker = query.upper().strip()
+{data['Ticker'].replace('.JK', '')} saat ini berada dalam trend **{trend}**. Harga bergerak {'di atas' if current_price > ma20 else 'di bawah'} MA20 (Rp {ma20:,.0f}), yang menunjukkan {'momentum positif' if current_price > ma20 else 'tekanan jual'}.
+
+RSI berada di level **{current_rsi:.1f}** yang mengindikasikan kondisi **{rsi_status}**. {'Ini bisa menjadi peluang beli karena harga sudah oversold.' if current_rsi < 30 else ('Hati-hati, saham ini sudah overbought dan berpotensi koreksi.' if current_rsi > 70 else 'Kondisi masih normal dan belum jenuh.')}
+
+Volume trading saat ini **{volume_ratio:.2f}x** dari rata-rata, menunjukkan {'akumulasi yang kuat dari big players' if volume_ratio > 1.5 else ('aktivitas normal' if volume_ratio > 0.8 else 'minat beli yang lemah')}.
+
+**Analisis Fundamental:**
+
+Dari sisi valuasi, PBV sebesar **{pbv:.2f}x** menunjukkan saham ini **{pbv_status}**. {'Ini adalah valuasi yang menarik untuk entry.' if pbv < 1.5 else ('Valuasi masih wajar.' if pbv < 3.0 else 'Valuasi sudah cukup tinggi, perlu hati-hati.')}
+
+ROE sebesar **{roe:.1f}%** menggambarkan {'efisiensi manajemen yang sangat baik dalam menghasilkan profit' if roe > 15 else ('kinerja yang cukup baik' if roe > 10 else 'kinerja yang perlu diperbaiki')}.
+
+**Sentimen Pasar:**
+
+Sentimen berita menunjukkan skor **{sentiment_score}%** yang tergolong **{sentiment_status}**. {data['Analysis']}
+
+**Kesimpulan:**
+
+{'Saham ini layak untuk dipertimbangkan sebagai kandidat beli dengan catatan perhatikan level support dan resistance.' if 'BUY' in status or 'WHALE' in status else ('Saham ini bisa dimasukkan watchlist untuk dipantau perkembangannya.' if 'WATCHLIST' in status else 'Sebaiknya tunggu konfirmasi sinyal yang lebih kuat sebelum masuk.')}
+                        """
+                        
+                        st.markdown(explanation)
+                    
+                    # Price Targets
+                    st.markdown("#### 🎯 Target Harga & Risk Management")
+                    
+                    # Calculate targets based on technical levels
+                    resistance_1 = current_price * 1.08
+                    resistance_2 = current_price * 1.15
+                    support = current_price * 0.92
+                    
+                    col_t1, col_t2 = st.columns(2)
+                    
+                    with col_t1:
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 15px; border-radius: 4px; border: 1px solid #2a2e39;">
+                            <div style="font-size: 12px; color: #848e9c; margin-bottom: 12px; font-weight: 600;">📈 TARGET PROFIT:</div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="color: #d1d4dc;">Target 1 (Konservatif):</span> <span style="color:#00c853; font-weight:700;">Rp {int(resistance_1):,}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="color: #d1d4dc;">Target 2 (Agresif):</span> <span style="color:#00c853; font-weight:700;">Rp {int(resistance_2):,}</span>
+                            </div>
+                            <div style="font-size: 10px; color: #848e9c; margin-top: 8px;">
+                                💡 Disarankan ambil profit bertahap di setiap target
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_t2:
+                        st.markdown(f"""
+                        <div style="background: #1e222d; padding: 15px; border-radius: 4px; border: 1px solid #2a2e39;">
+                            <div style="font-size: 12px; color: #848e9c; margin-bottom: 12px; font-weight: 600;">🛡️ RISK MANAGEMENT:</div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="color: #d1d4dc;">Stop Loss:</span> <span style="color:#ff5252; font-weight:700;">Rp {int(support):,}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="color: #d1d4dc;">Risk/Reward Ratio:</span> <span style="color:#ffa726; font-weight:700;">1:2</span>
+                            </div>
+                            <div style="font-size: 10px; color: #848e9c; margin-top: 8px;">
+                                ⚠️ Selalu gunakan stop loss untuk proteksi modal
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Update ticker for chart and collapse sidebar on mobile
+                    chart_tk = ticker_query.replace('.JK', '')
+                    if chart_tk == "^JKSE": chart_tk = "COMPOSITE"
+                    st.session_state.advisor_ticker = chart_tk
+                    st.session_state.collapse_sidebar = True
+                    
+                else:
+                    st.error("Emiten tidak ditemukan atau data tidak mencukupi. Pastikan kode saham benar (misal: ZINC, BBCA).")
+        
+        else:
+            # General question - provide educational response
+            st.markdown("### 💡 Jawaban Analis")
+            
+            # Simple keyword-based responses (can be enhanced with actual AI/LLM)
+            query_lower = query.lower()
+            
+            response = ""
+            
+            if any(word in query_lower for word in ['rsi', 'relative strength']):
+                response = """
+**Apa itu RSI (Relative Strength Index)?**
+
+RSI adalah indikator momentum yang mengukur kecepatan dan perubahan pergerakan harga. RSI bergerak antara 0-100.
+
+**Cara Membaca RSI:**
+- **RSI > 70**: Kondisi Overbought (Jenuh Beli) - Harga mungkin akan koreksi
+- **RSI < 30**: Kondisi Oversold (Jenuh Jual) - Peluang untuk beli
+- **RSI 30-70**: Kondisi Normal
+
+**Strategi Trading:**
+1. Beli ketika RSI keluar dari zona oversold (<30) dan mulai naik
+2. Jual ketika RSI masuk zona overbought (>70)
+3. Perhatikan divergence antara harga dan RSI untuk sinyal reversal
+
+**Tips:** Jangan gunakan RSI sendirian, kombinasikan dengan indikator lain seperti MA dan Volume.
+                """
+            
+            elif any(word in query_lower for word in ['pbv', 'price to book']):
+                response = """
+**Apa itu PBV (Price to Book Value)?**
+
+PBV adalah rasio yang membandingkan harga saham dengan nilai buku per saham. Ini menunjukkan berapa kali pasar menghargai nilai buku perusahaan.
+
+**Cara Menghitung:**
+PBV = Harga Saham / Nilai Buku per Saham
+
+**Interpretasi:**
+- **PBV < 1**: Undervalued - Saham diperdagangkan di bawah nilai bukunya (Potensi Bargain)
+- **PBV 1-3**: Fair Value - Valuasi wajar
+- **PBV > 3**: Overvalued - Saham mungkin sudah mahal
+
+**Catatan Penting:**
+- PBV rendah tidak selalu berarti saham bagus, bisa jadi ada masalah fundamental
+- Bandingkan PBV dengan kompetitor di sektor yang sama
+- Cocok untuk saham sektor perbankan dan properti
+                """
+            
+            elif any(word in query_lower for word in ['roe', 'return on equity']):
+                response = """
+**Apa itu ROE (Return on Equity)?**
+
+ROE mengukur seberapa efisien perusahaan menghasilkan profit dari modal pemegang saham.
+
+**Cara Menghitung:**
+ROE = (Laba Bersih / Ekuitas Pemegang Saham) × 100%
+
+**Interpretasi:**
+- **ROE > 15%**: Excellent - Manajemen sangat efisien
+- **ROE 10-15%**: Good - Kinerja baik
+- **ROE < 10%**: Weak - Perlu evaluasi
+
+**Mengapa ROE Penting:**
+1. Menunjukkan kemampuan perusahaan menghasilkan profit
+2. Membandingkan efisiensi antar perusahaan sejenis
+3. ROE konsisten tinggi = manajemen berkualitas
+
+**Tips:** Cari saham dengan ROE konsisten di atas 15% selama 3-5 tahun terakhir.
+                """
+            
+            elif any(word in query_lower for word in ['volume', 'vol']):
+                response = """
+**Mengapa Volume Trading Penting?**
+
+Volume menunjukkan jumlah saham yang diperdagangkan dalam periode tertentu. Volume adalah konfirmasi dari pergerakan harga.
+
+**Prinsip Dasar:**
+- **Volume Tinggi + Harga Naik** = Trend naik kuat (Bullish)
+- **Volume Tinggi + Harga Turun** = Trend turun kuat (Bearish)
+- **Volume Rendah** = Pergerakan tidak terkonfirmasi, bisa false signal
+
+**Volume Ratio:**
+- **> 1.5x**: Akumulasi kuat, big players masuk
+- **0.8-1.5x**: Normal
+- **< 0.8x**: Minat lemah
+
+**Strategi:**
+1. Cari breakout dengan volume tinggi untuk konfirmasi
+2. Hindari trading saat volume rendah (likuiditas buruk)
+3. Perhatikan volume spike - bisa jadi ada news/rumor
+                """
+            
+            elif any(word in query_lower for word in ['moving average', 'ma', 'ema']):
+                response = """
+**Apa itu Moving Average (MA)?**
+
+Moving Average adalah rata-rata harga dalam periode tertentu yang membantu mengidentifikasi trend.
+
+**Jenis MA:**
+- **MA5**: Trend jangka sangat pendek (1 minggu)
+- **MA20**: Trend jangka pendek (1 bulan)
+- **MA50**: Trend jangka menengah (2.5 bulan)
+- **MA200**: Trend jangka panjang (1 tahun)
+
+**Cara Membaca:**
+- Harga di atas MA = Bullish
+- Harga di bawah MA = Bearish
+- Golden Cross (MA50 potong MA200 ke atas) = Sinyal beli kuat
+- Death Cross (MA50 potong MA200 ke bawah) = Sinyal jual kuat
+
+**Strategi Trading:**
+1. Beli ketika harga bounce dari MA20/MA50
+2. Jual ketika harga break down MA20/MA50
+3. Gunakan MA sebagai support/resistance dinamis
+                """
+            
+            elif any(word in query_lower for word in ['support', 'resistance', 'sr']):
+                response = """
+**Apa itu Support dan Resistance?**
+
+**Support** adalah level harga dimana tekanan beli cukup kuat untuk menghentikan penurunan harga.
+**Resistance** adalah level harga dimana tekanan jual cukup kuat untuk menghentikan kenaikan harga.
+
+**Cara Mengidentifikasi:**
+1. Lihat level harga yang berulang kali ditolak (rejected)
+2. Perhatikan high/low sebelumnya
+3. Gunakan round numbers (misal: 1000, 5000, 10000)
+
+**Strategi Trading:**
+- **Buy at Support**: Beli ketika harga mendekati support dengan konfirmasi volume
+- **Sell at Resistance**: Jual ketika harga mendekati resistance
+- **Breakout**: Jika harga break resistance dengan volume tinggi, bisa lanjut naik
+- **Breakdown**: Jika harga break support, bisa lanjut turun
+
+**Penting:** Support yang ditembus akan menjadi resistance baru, begitu juga sebaliknya.
+                """
+            
+            elif any(word in query_lower for word in ['kapan', 'waktu', 'timing']):
+                response = """
+**Kapan Waktu Terbaik untuk Beli/Jual Saham?**
+
+**Waktu Terbaik Beli:**
+1. **Saat Koreksi Pasar** - Beli saat pasar turun tapi fundamental masih bagus
+2. **Breakout dengan Volume** - Harga break resistance dengan volume tinggi
+3. **RSI Oversold** - RSI < 30 dan mulai rebound
+4. **Golden Cross** - MA50 potong MA200 ke atas
+5. **Berita Positif** - Kinerja keuangan bagus, kontrak baru, dll
+
+**Waktu Terbaik Jual:**
+1. **Target Profit Tercapai** - Sudah naik 10-20% dari entry
+2. **RSI Overbought** - RSI > 70 dan mulai turun
+3. **Break Support** - Harga break support penting
+4. **Death Cross** - MA50 potong MA200 ke bawah
+5. **Berita Negatif** - Kinerja buruk, masalah hukum, dll
+
+**Tips:** Jangan serakah, ambil profit bertahap. Gunakan stop loss untuk proteksi.
+                """
+            
+            elif any(word in query_lower for word in ['diversifikasi', 'portofolio']):
+                response = """
+**Pentingnya Diversifikasi Portofolio**
+
+**Apa itu Diversifikasi?**
+Menyebar investasi ke berbagai aset untuk mengurangi risiko.
+
+**Prinsip Diversifikasi:**
+1. **Jangan Taruh Semua Telur di Satu Keranjang**
+2. **Alokasi Ideal:**
+   - 40% Saham Blue Chip (BBCA, BBRI, TLKM)
+   - 30% Saham Growth (Teknologi, Konsumer)
+   - 20% Saham Value (Undervalued)
+   - 10% Cash untuk peluang
+
+**Diversifikasi Sektor:**
+- Perbankan
+- Konsumer
+- Infrastruktur
+- Teknologi
+- Kesehatan
+- Energi
+
+**Berapa Banyak Saham?**
+- Pemula: 5-8 saham
+- Intermediate: 8-12 saham
+- Advanced: 12-20 saham
+
+**Tips:** Review portofolio setiap 3 bulan, rebalance jika ada sektor yang terlalu dominan.
+                """
+            
+            else:
+                response = f"""
+**Pertanyaan Anda: "{query}"**
+
+Maaf, saya belum memiliki informasi spesifik untuk pertanyaan ini. Namun, saya bisa membantu Anda dengan:
+
+**Topik yang Bisa Ditanyakan:**
+- Analisis saham tertentu (ketik kode saham seperti BBCA, ZINC)
+- Indikator teknikal (RSI, MA, Volume, Support/Resistance)
+- Analisis fundamental (PBV, ROE, PER)
+- Strategi trading dan timing
+- Diversifikasi portofolio
+- Risk management
+
+**Contoh Pertanyaan:**
+- "BBCA" - Untuk analisis lengkap BBCA
+- "Apa itu RSI?" - Penjelasan indikator RSI
+- "Kapan waktu terbaik beli saham?" - Tips timing
+- "Bagaimana cara diversifikasi?" - Strategi portofolio
+
+Silakan tanyakan lagi dengan topik yang lebih spesifik!
+                """
+            
+            with st.container(border=True):
+                st.markdown(response)
+            
+            # Store in chat history
+            st.session_state.advisor_chat_history.append({
+                'type': 'general_question',
+                'query': query,
+                'response': response
+            })
     
+    # Always show chart
+    if 'advisor_ticker' not in st.session_state: 
+        st.session_state.advisor_ticker = "COMPOSITE"
+    
+    st.markdown("---")
     st.markdown(f"### 📈 Live Chart Forecast: {st.session_state.advisor_ticker}")
-    tv_symbol = f"IDX:{st.session_state.advisor_ticker.replace('.JK', '')}"
+    tv_symbol = f"IDX:{st.session_state.advisor_ticker}"
     
     st.components.v1.html(
         f"""
