@@ -601,7 +601,8 @@ def analyze_crypto(ticker_symbol):
     
     if headline:
         headline_link = news_list[0].get('link', '#') if news_list else '#'
-        analysis += f"---\n\n*Headline Utama:* [\"{headline}\"]({headline_link})"
+        # Simplified markdown link for stability
+        analysis += f"---\n\n*Headline Utama:* **[{headline.replace('[','').replace(']','')}]({headline_link})**"
 
     return {
         "Ticker": ticker_symbol,
@@ -1695,15 +1696,15 @@ if main_active_tab == "Chart":
                             st.markdown(row['Analysis'])
                             st.markdown("---")
                             if row['News List']:
-                                for news in row['News List']:
-                                    st.markdown(f"""
-                                        <div style="margin-bottom: 20px; padding: 12px; border-left: 4px solid #ff2d75; background: rgba(255,255,255,0.03); border-radius: 0 8px 8px 0;">
-                                            <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">🗓️ {news.get('date', 'Baru')} | 🌐 {news.get('source')}</div>
-                                            <a href="{news.get('link', '#')}" target="_blank" style="text-decoration: none; color: #ff2d75; font-weight: 700; font-size: 14px; display: block; line-height: 1.4; transition: opacity 0.2s;">
-                                                {news.get('title')}
-                                            </a>
-                                        </div>
-                                    """, unsafe_allow_html=True)
+                                for idx_n, news in enumerate(row['News List']):
+                                    # Use a native link button for guaranteed clickability
+                                    st.link_button(
+                                        f"🔗 {news.get('title')[:60]}...", 
+                                        news.get('link', '#'),
+                                        use_container_width=True,
+                                        help=f"Source: {news.get('source')} | {news.get('date')}"
+                                    )
+                                    st.markdown(f"<div style='font-size: 10px; color: #848e9c; margin-bottom: 10px; text-align: right;'>🗓️ {news.get('date')} | 🌐 {news.get('source')}</div>", unsafe_allow_html=True)
                             else: st.caption("Tidak ada berita spesifik hari ini.")
                         
                         st.button(f"Load Chart", key=f"btn_{key_prefix}_{row['Ticker']}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
