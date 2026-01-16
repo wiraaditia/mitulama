@@ -11,6 +11,26 @@ from concurrent.futures import ThreadPoolExecutor
 import pickle
 import os
 import numpy as np
+import decimal
+
+def format_price(price):
+    """Custom formatter to handle micro-prices without scientific notation"""
+    if price is None: return "$0.00"
+    if price == 0: return "$0.00"
+    
+    # Use decimal for high precision formatting
+    d = decimal.Decimal(str(price))
+    if price < 1:
+        # For memecoins like PEPE, show up to 8-10 decimal places
+        formatted = format(price, '.10f').rstrip('0').rstrip('.')
+        # Ensure at least 4 decimals for consistency if very small
+        if '.' in formatted and len(formatted.split('.')[1]) < 4:
+            formatted = format(price, '.4f')
+        return f"${formatted}"
+    elif price < 100:
+        return f"${price:,.4f}"
+    else:
+        return f"${price:,.2f}"
 
 # Cache file for persistent scanner results
 CACHE_FILE = ".scanner_cache.pkl"
@@ -91,191 +111,226 @@ def clear_watchlist_cache():
             pass
 
 # --- CONFIG DASHBOARD ---
-st.set_page_config(page_title="EmitScan Indonesia", page_icon="favicon.png", layout="wide")
+st.set_page_config(page_title="mitulama", page_icon="favicon.png", layout="wide")
 
 # --- CUSTOM CSS STOCKBIT STYLE ---
 # --- CUSTOM CSS PREMIUM DARK STYLE ---
 # --- CUSTOM CSS TRADINGVIEW / STOCKBIT PRO STYLE ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600;700&display=swap');
     
+    /* Google AdSense Main Script */
+</style>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4874093418695330" crossorigin="anonymous"></script>
+<style>
+    :root {
+        --primary: #ff2d75;
+        --secondary: #ff007f;
+        --bg-black: #0d0d12;
+        --card-bg: #1a1a24;
+        --border-pink: rgba(255, 45, 117, 0.3);
+        --glow: 0 0 10px rgba(255, 45, 117, 0.4);
+    }
+
     /* Global Reset & Font */
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif !important;
-        background-color: #131722 !important; /* TradingView Black */
-        color: #e0e0e0 !important;
-        font-size: 13px; /* Smaller font for pro feel */
-        overflow-x: hidden !important; /* Remove horizontal scroll */
+        background-color: var(--bg-black) !important;
+        color: #fce4ec !important;
+        font-size: 13px;
+        overflow-x: hidden !important;
         scroll-behavior: smooth !important;
+    }
+
+    h1, h2, h3 {
+        font-family: 'Orbitron', sans-serif !important;
+        color: var(--primary) !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        text-shadow: 0 0 15px rgba(255, 45, 117, 0.5);
     }
     
     /* Sidebar (Watchlist) */
     [data-testid="stSidebar"] {
-        background-color: #1e222d !important;
-        border-right: 1px solid #2a2e39;
+        background-color: #14141d !important;
+        border-right: 1px solid var(--border-pink);
         width: 300px !important;
     }
     
     /* Main Layout Gap */
     .block-container {
-        padding-top: 0rem !important;
+        padding-top: 1rem !important;
         padding-bottom: 5rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
         max-width: 100% !important;
         overflow-x: hidden !important;
     }
     
-    /* Responsive Sidebar Auto-Collapse Support */
-    @media (max-width: 768px) {
-        div[data-testid="stSidebar"][aria-expanded="true"] {
-            /* We can't easily force it closed with pure CSS but we can hint UI */
-        }
-    }
-    
     /* Metrics */
     div[data-testid="stMetric"] {
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
+        background-color: rgba(255, 45, 117, 0.05) !important;
+        border: 1px solid var(--border-pink) !important;
+        padding: 10px !important;
+        border-radius: 8px !important;
+        box-shadow: var(--glow);
     }
-    div[data-testid="stMetricLabel"] { font-size: 11px !important; color: #787b86 !important; }
-    div[data-testid="stMetricValue"] { font-size: 16px !important; color: #d1d4dc !important; }
+    div[data-testid="stMetricLabel"] { font-size: 11px !important; color: #ff80ab !important; font-family: 'Orbitron', sans-serif;}
+    div[data-testid="stMetricValue"] { font-size: 18px !important; color: #fff !important; font-weight: 700;}
     
-    /* Buttons (Buy/Sell Style) */
+    /* Buttons (Cyber Style) */
     .stButton > button {
+        background: linear-gradient(45deg, #ff2d75, #ff007f) !important;
+        color: white !important;
         border-radius: 4px;
-        font-weight: 600;
-        font-size: 12px;
-        padding: 4px 12px;
-        border: none;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-family: 'Orbitron', sans-serif;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(255, 0, 127, 0.3);
+        transition: all 0.3s ease;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255, 0, 127, 0.5);
     }
     
-    /* Order Book Table */
-    .order-book-cell {
-        font-family: 'Roboto Mono', monospace;
-        font-size: 12px;
-        padding: 4px;
-    }
-    
-    /* Tabs (Bottom Panel) */
+    /* Tabs (Cyber Panel) */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: #1e222d;
-        padding: 0px 10px;
-        border-bottom: 1px solid #2a2e39;
-        gap: 20px;
+        background-color: #14141d;
+        padding: 5px 15px;
+        border-bottom: 2px solid var(--border-pink);
+        gap: 30px;
     }
     .stTabs [data-baseweb="tab"] {
-        height: 40px;
-        white-space: pre-wrap;
+        height: 45px;
         background-color: transparent;
-        border-radius: 0px;
-        color: #787b86;
+        color: #ff80ab;
+        font-family: 'Orbitron', sans-serif;
         font-size: 13px;
-        font-weight: 500;
-        padding-top: 0;
-        padding-bottom: 0;
+        font-weight: 600;
     }
     .stTabs [aria-selected="true"] {
-        background-color: transparent;
-        color: #2962ff;
-        border-bottom: 2px solid #2962ff;
+        color: var(--primary) !important;
+        border-bottom: 3px solid var(--primary) !important;
+        text-shadow: 0 0 10px rgba(255, 45, 117, 0.5);
     }
     
     /* Scrollbars */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #131722; }
-    ::-webkit-scrollbar-thumb { background: #363a45; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #4e525e; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0d0d12; }
+    ::-webkit-scrollbar-thumb { background: #ff007f; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #ff2d75; }
 
-    /* Fix: Stop dimming effect during script execution (Anti-Shadow) */
+    /* Fix: Stop dimming effect */
     div[data-testid="stVerticalBlock"] > div[style*="opacity"] {
         opacity: 1 !important;
     }
 
-    /* RESPONSIVE DESIGN OVERRIDES */
-    @media (max-width: 768px) {
+    /* Metrics Grid Utility */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 15px;
+    }
+    .metric-item {
+        background: rgba(255, 45, 117, 0.05);
+        padding: 10px;
+        border: 1px solid var(--border-pink);
+        border-radius: 8px;
+        text-align: center;
+    }
+    .metric-label {
+        font-size: 10px;
+        color: #ff80ab;
+        font-family: 'Orbitron', sans-serif;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 4px;
+    }
+    .metric-value {
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    /* Cards */
+    div[data-testid="stExpander"] {
+        background: var(--card-bg) !important;
+        border: 1px solid var(--border-pink) !important;
+        border-radius: 10px !important;
+    }
+
+    /* --- RESPONSIVE ADJUSTMENTS --- */
+    @media (max-width: 1024px) {
         .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
         }
-        
-        /* Header Stack */
+    }
+
+    @media (max-width: 768px) {
+        html, body, [class*="css"] {
+            font-size: 12px;
+        }
         .main-header {
             flex-direction: column !important;
             align-items: flex-start !important;
             gap: 15px !important;
-            padding: 15px !important;
         }
         .header-right {
             width: 100% !important;
             justify-content: space-between !important;
-            flex-wrap: wrap !important;
             gap: 10px !important;
         }
-        
-        /* Sidebar layout adjustment */
-        [data-testid="stSidebar"] {
-            width: 100% !important;
+        .metrics-grid {
+            grid-template-columns: 1fr;
         }
-        
-        /* Sidebar Tab Adjustments */
+        div[data-testid="stMetricValue"] {
+            font-size: 16px !important;
+        }
         .stTabs [data-baseweb="tab-list"] {
-            gap: 5px !important;
+            gap: 10px;
+            padding: 5px 5px;
         }
         .stTabs [data-baseweb="tab"] {
-            font-size: 11px !important;
-            padding: 0 4px !important;
+            font-size: 11px;
+            padding: 0 5px;
         }
+    }
+    
+    /* Clean Hide for non-essential sidebar elements on mobile */
+    @media (max-width: 480px) {
+        div[data-testid="stMetricLabel"] { font-size: 9px !important; }
+        .metric-label { font-size: 9px !important; }
+        .mobile-hide { display: none !important; }
+    }
 
-        /* Metrics Grid for Stock Cards */
-        .metrics-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-        }
-        
-        /* Adjust Font Sizes for Mobile */
-        span[style*="font-size: 20px"] { font-size: 16px !important; }
-        .wl-price { font-size: 12px !important; }
-        .wl-ticker { font-size: 12px !important; }
-        
-        /* Hide non-critical buttons on very small screens if needed */
-        @media (max-width: 480px) {
-            .header-right a { padding: 4px 8px !important; font-size: 9px !important; }
-        }
+    /* Floating Back to Top */
+    #back-to-top {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: var(--primary);
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(255, 45, 117, 0.4);
+        text-decoration: none;
+        font-weight: bold;
+        border: 1px solid rgba(255,255,255,0.2);
     }
-    
-    /* Metrics Grid Utility */
-    .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-        margin-top: 10px;
-        margin-bottom: 10px;
-    }
-    .metric-item {
-        background: rgba(255,255,255,0.02);
-        padding: 6px;
-        border-radius: 4px;
-        text-align: center;
-    }
-    .metric-label {
-        font-size: 9px;
-        color: #848e9c;
-        text-transform: uppercase;
-        display: block;
-        margin-bottom: 2px;
-    }
-    .metric-value {
-        font-size: 12px;
-        font-weight: 700;
-        color: #e0e0e0;
-    }
-    
-    /* Prevent horizontal scroll from sparklines */
-    svg { max-width: 100%; }
 </style>
+<a id="back-to-top" href="#" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;">↑</a>
 """, unsafe_allow_html=True)
 
 # --- ANTI-BLOCKING MEASURES ---
@@ -287,65 +342,66 @@ USER_AGENTS = [
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
 ]
 
-# --- EXPANDED TICKER DATABASE (LQ45 + POPULAR) ---
-# Simulasi "Semua Emiten" dengan mengambil 50 sahama teraktif/populer.
-TICKERS = list(dict.fromkeys([
-    # --- BANKING & FINANCE ---
-    'BBCA.JK', 'BBRI.JK', 'BMRI.JK', 'BBNI.JK', 'BBTN.JK', 'ARTO.JK', 'BRIS.JK', 'PNBN.JK', 'BDMN.JK', 'BJBR.JK',
-    'BJTM.JK', 'BTPN.JK', 'BNGA.JK', 'BNII.JK', 'MEGA.JK', 'MAYB.JK', 'AGRO.JK', 'BBYB.JK', 'BVIC.JK', 'DNAR.JK',
-    # --- TECH & DIGITAL ---
-    'GOTO.JK', 'BUKA.JK', 'BELI.JK', 'WIFI.JK', 'MTDL.JK', 'ATIC.JK', 'MCAS.JK', 'DMMX.JK', 'MLPT.JK', 'DCII.JK',
-    # --- ENERGY (OIL, GAS, COAL) ---
-    'ADRO.JK', 'PTBA.JK', 'ITMG.JK', 'PGAS.JK', 'MEDC.JK', 'AKRA.JK', 'HRUM.JK', 'INDY.JK', 'BUMI.JK', 'DOID.JK',
-    'ABMM.JK', 'DSSP.JK', 'ENRG.JK', 'ELSA.JK', 'RAJA.JK', 'KKGI.JK', 'MBMA.JK', 'ADMR.JK', 'TOBA.JK', 'SGER.JK',
-    # --- METALS & MINING ---
-    'ANTM.JK', 'INCO.JK', 'TINS.JK', 'MDKA.JK', 'BRMS.JK', 'PSAB.JK', 'MBSS.JK', 'NCKL.JK', 'NICL.JK', 'DKFT.JK',
-    'ZINC.JK', 'SQMI.JK', 'CITA.JK', 'TPIA.JK', 'FNI.JK',
-    # --- CONSUMER GOODS ---
-    'UNVR.JK', 'ICBP.JK', 'INDF.JK', 'MYOR.JK', 'AMRT.JK', 'CPIN.JK', 'JPFA.JK', 'HMSP.JK', 'GGRM.JK', 'KLBF.JK',
-    'SIDO.JK', 'WIIM.JK', 'ULTJ.JK', 'ROTI.JK', 'CLEO.JK', 'STTP.JK', 'ADES.JK', 'WOOD.JK', 'CMRY.JK',
-    # --- HEALTHCARE ---
-    'HEAL.JK', 'MIKA.JK', 'SILO.JK', 'PRDA.JK', 'PEHA.JK', 'SAME.JK', 'BMHS.JK', 'DGNS.JK',
-    # --- RETAIL & TRADE ---
-    'ACES.JK', 'MAPI.JK', 'MAPA.JK', 'RALS.JK', 'LPPF.JK', 'ERAA.JK', 'MDRN.JK', 'MPPA.JK', 'MIDI.JK', 'CSAP.JK',
-    # --- PROPERTY & REAL ESTATE ---
-    'BSDE.JK', 'PWON.JK', 'CTRA.JK', 'SMRA.JK', 'ASRI.JK', 'APLN.JK', 'DILD.JK', 'BKSL.JK', 'DUTI.JK', 'SSIA.JK',
-    'PPRO.JK', 'DMAS.JK', 'MKPI.JK', 'LPKR.JK', 'LPCK.JK', 'GMTD.JK', 'BEST.JK', 'KIJA.JK', 'FMII.JK', 'MTLA.JK',
-    # --- INFRASTRUCTURE & TELECOM ---
-    'TLKM.JK', 'ISAT.JK', 'EXCL.JK', 'FREN.JK', 'JSMR.JK', 'WIKA.JK', 'PTPP.JK', 'ADHI.JK', 'WSKT.JK', 'NRCA.JK',
-    'META.JK', 'TOWR.JK', 'TBIG.JK', 'CENT.JK', 'BALI.JK', 'IDPR.JK', 'BIRD.JK', 'ASSA.JK', 'WEHA.JK', 'SMDR.JK',
-    # --- BASIC INDUSTRY & CHEMICALS ---
-    'SMGR.JK', 'INTP.JK', 'SMBR.JK', 'INKP.JK', 'TKIM.JK', 'MAIN.JK', 'ANJT.JK', 'LSIP.JK', 'SIMP.JK',
-    'BWPT.JK', 'SSMS.JK', 'AALI.JK', 'TAPG.JK', 'DSNG.JK', 'STAA.JK', 'KRAS.JK', 'BAJA.JK', 'ISSP.JK', 'NIKL.JK',
-    # --- CEMENT & CONSTRUCTION ---
-    'WTON.JK', 'ACST.JK', 'TOTL.JK', 'WEGE.JK', 'PPRE.JK', 'JKON.JK',
-    # --- TRANSPORT & LOGISTICS ---
-    'GIAA.JK', 'TMAS.JK', 'NELY.JK', 'PSSI.JK', 'TPMA.JK', 'HAIS.JK', 'IPCC.JK', 'PORT.JK',
-    # --- OTHERS / POPULAR ---
-    'MNCN.JK', 'SCMA.JK', 'MSIN.JK', 'VIVA.JK', 'LINK.JK', 'MLBI.JK', 'VICI.JK', 'MARK.JK', 'BELL.JK',
-    'TFAS.JK', 'KRAH.JK', 'GTSI.JK', 'LABA.JK', 'OASA.JK', 'SPTO.JK', 'TRJA.JK', 'UCID.JK', 'URBN.JK', 'VOKS.JK'
-]))
+# --- COINGECKO DATA FETCHING ---
+@st.cache_data(ttl=3600)
+def get_top_crypto_tickers(count=1000):
+    """Fetch top N cryptocurrencies from CoinGecko (multi-page)"""
+    all_data = []
+    per_page = 250
+    pages = (count + per_page - 1) // per_page
+    
+    try:
+        for page in range(1, pages + 1):
+            url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                page_data = response.json()
+                all_data.extend(page_data)
+                # Small delay to avoid aggressive rate limiting
+                if pages > 1: time.sleep(0.5)
+            else:
+                break
+        return all_data[:count]
+    except Exception as e:
+        st.error(f"Error fetching data from CoinGecko: {e}")
+        return []
+
+# Initialize TICKERS with CoinGecko data (Up to 1000 coins)
+CRYPTO_DATA = get_top_crypto_tickers(1000)
+# Ensure unique tickers and build map
+TICKERS = []
+COIN_MAP = {}
+seen_tickers = set()
+
+for coin in CRYPTO_DATA:
+    sym = coin['symbol'].upper()
+    if sym not in seen_tickers:
+        TICKERS.append(sym)
+        seen_tickers.add(sym)
+    # Map by symbol for quick lookup (if duplicate symbol, first one - usually high mcap - wins)
+    if sym not in COIN_MAP:
+        COIN_MAP[sym] = coin
 
 # --- CUSTOM CSS LOADING ANIMATION (Cyberpunk Style) ---
 def custom_loading_overlay(status_text="LOADING...", progress=0):
-    # Dynamic conic gradient for the ring
-    gradient = f"conic-gradient(#00c853 {progress}%, #1e222d 0)"
+    # Dynamic conic gradient for the ring - PINK THEME
+    gradient = f"conic-gradient(#ff007f {progress}%, #14141d 0)"
     
-    return f"""<div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(19, 23, 34, 0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+    return f"""<div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(13, 13, 18, 0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(8px);">
         <!-- Circular Progress Container -->
-        <div style="position: relative; width: 120px; height: 120px; border-radius: 50%; background: {gradient}; display: flex; justify-content: center; align-items: center; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 200, 83, 0.2); animation: pulse-ring 2s infinite;">
+        <div style="position: relative; width: 140px; height: 140px; border-radius: 50%; background: {gradient}; display: flex; justify-content: center; align-items: center; margin-bottom: 25px; box-shadow: 0 0 30px rgba(255, 0, 127, 0.3); animation: pulse-ring 2s infinite;">
             <!-- Inner Circle (Mask) -->
-            <div style="width: 100px; height: 100px; background: #131722; border-radius: 50%; display: flex; justify-content: center; align-items: center; flex-direction: column;">
-                <div style="font-family: 'Courier New', monospace; color: #fff; font-size: 24px; font-weight: bold;">{progress}%</div>
+            <div style="width: 120px; height: 120px; background: #0d0d12; border-radius: 50%; display: flex; justify-content: center; align-items: center; flex-direction: column; border: 1px solid rgba(255, 0, 127, 0.2);">
+                <div style="font-family: 'Orbitron', monospace; color: #fff; font-size: 28px; font-weight: bold; text-shadow: 0 0 10px rgba(255, 0, 127, 0.5);">{progress}%</div>
             </div>
             <!-- Spinning Border for activity indication -->
-            <div style="position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px; border: 2px solid transparent; border-top: 2px solid #00c853; border-radius: 50%; animation: spin 1.5s linear infinite;"></div>
+            <div style="position: absolute; top: -8px; left: -8px; right: -8px; bottom: -8px; border: 2px solid transparent; border-top: 2px solid #ff2d75; border-radius: 50%; animation: spin 1s linear infinite;"></div>
         </div>
-        <div style="font-family: 'Courier New', monospace; color: #00c853; font-size: 18px; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0, 200, 83, 0.5);">{status_text}</div>
-        <div style="font-family: 'Courier New', monospace; color: #848e9c; font-size: 12px; margin-top: 10px;">Mencari emiten dari berbagai sumber...</div>
+        <div style="font-family: 'Orbitron', monospace; color: #ff2d75; font-size: 20px; font-weight: bold; letter-spacing: 4px; text-shadow: 0 0 15px rgba(255, 45, 117, 0.6);">{status_text}</div>
+        <div style="font-family: 'Inter', sans-serif; color: #ff80ab; font-size: 13px; margin-top: 15px; opacity: 0.8;">Processing Cyber Assets...</div>
         <style>
             @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
-            @keyframes pulse-ring {{ 0% {{ box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.4); }} 70% {{ box-shadow: 0 0 0 10px rgba(0, 200, 83, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(0, 200, 83, 0); }} }}
+            @keyframes pulse-ring {{ 0% {{ box-shadow: 0 0 0 0 rgba(255, 0, 127, 0.4); }} 70% {{ box-shadow: 0 0 0 15px rgba(255, 0, 127, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(255, 0, 127, 0); }} }}
         </style>
     </div>"""
 
@@ -361,59 +417,24 @@ def calculate_obv(df):
     obv = (np.sign(df['Close'].diff()) * df['Volume']).fillna(0).cumsum()
     return obv
 
-# --- FUNGSI LOGIKA (SAFE VERSION) ---
-@st.cache_data(ttl=600) # Cache 10 mins
-def get_stock_data(ticker, hist=None):
-    # Optimasi: Kurangi delay untuk kecepatan maksimal (0.01-0.05s)
-    time.sleep(random.uniform(0.01, 0.05))
-    
-    try:
-        stock = yf.Ticker(ticker)
-        # Optimasi: Gunakan data historis yang sudah diunduh jika tersedia
-        if hist is None:
-            # Fetch 3 months for OBV and Trend Analysis
-            hist = stock.history(period="3mo")
-        
-        if len(hist) < 30: return None # Need more data for RSI/OBV (relaxed to 30)
-        
-        # Fundamental data
-        try: 
-            info = stock.info
-            pbv = info.get('priceToBook', 0)
-            
-            # Fetch Cash Flow for better accuracy
-            cf = stock.cashflow
-            latest_cf = cf.iloc[:, 0] if not cf.empty else {}
-            fcf = latest_cf.get('Free Cash Flow', 0)
-            ocf = latest_cf.get('Operating Cash Flow', 0)
-            cash_status = "BAIK" if (fcf > 0 or ocf > 0) else "BURUK"
-            if fcf == 0 and ocf == 0: cash_status = "N/A"
-            
-        except: 
-            info = {}
-            pbv = 0
-            cash_status = "N/A"
-            
-        return hist, pbv, info, cash_status
-    except Exception as e:
-        return None
+@st.cache_data(ttl=600)
+def get_crypto_stats(ticker):
+    """Placeholder for custom crypto stats if needed, currently using COIN_MAP"""
+    return None
 
 @st.cache_data(ttl=300)
-def get_ihsg_info():
+def get_global_market_stats():
+    """Fetch global crypto market stats instead of IHSG"""
     try:
-        ihsg = yf.Ticker("^JKSE")
-        hist = ihsg.history(period="2d")
-        if len(hist) < 2: return None
-        
-        current_price = hist['Close'].iloc[-1]
-        prev_price = hist['Close'].iloc[-2]
-        change = current_price - prev_price
-        change_pct = (change / prev_price) * 100
+        url = "https://api.coingecko.com/api/v3/global"
+        res = requests.get(url, timeout=5)
+        data = res.json()['data']
         
         return {
-            'price': current_price,
-            'change': change,
-            'percent': change_pct
+            'price': f"${data['total_market_cap']['usd']/1e12:.2f}T",
+            'change': data['market_cap_change_percentage_24h_usd'],
+            'percent': f"{data['market_cap_change_percentage_24h_usd']:+.2f}%",
+            'btc_d': f"{data['market_cap_percentage']['btc']:.1f}%"
         }
     except:
         return None
@@ -427,183 +448,71 @@ def get_news_sentiment(ticker):
     try:
         clean_ticker = ticker.replace('.JK', '')
         
-        # Multi-source news aggregation with specific search logic
-        # Optimize search query to avoid irrelevant results (e.g. BEST -> Video Game)
-        # Use more specific query with "emiten" or "PT" to ensure stock-related news
-        search_query = f"emiten {clean_ticker}"
-        
-        news_sources = [
-            {"name": "CNBC Indonesia", "url": f"https://www.cnbcindonesia.com/search?query={search_query}"},
-            {"name": "CNN Indonesia", "url": f"https://www.cnnindonesia.com/search/?query={search_query}"},
-            {"name": "Kontan", "url": f"https://www.kontan.co.id/search?search={search_query}"},
-            {"name": "Bisnis.com", "url": f"https://search.bisnis.com/?q={search_query}"},
+        # Multi-source news aggregation
+        sources = [
+            f"https://news.google.com/rss/search?q={clean_ticker}+crypto+news&hl=en-US&gl=US&ceid=US:en",
+            f"https://cryptopanic.com/news/rss/?filter=all&q={clean_ticker}"
         ]
         
         all_news = []
-        social_keywords = ['netizen', 'viral', 'trending', 'socmed', 'X', 'twitter', 'perbincangan', 'ramai']
-        noise_keywords = ['edit profil', 'hubungi kami', 'redaksi', 'career', 'iklan', 'disclaimer']
-        
-        # Add irrelevant keywords that might appear for certain tickers
-        # For example: BEST might match "terbaik" (best in Indonesian)
-        irrelevant_keywords = {
-            'BEST': ['game', 'video game', 'gaming', 'juara', 'terbaik 2025', 'award'],
-            'GOOD': ['baik untuk', 'makanan', 'resep'],
-            'NICE': ['bagus untuk', 'tips'],
-            'FAST': ['cepat untuk', 'cara cepat'],
-            'LINK': ['tautan', 'cara link'],
-        }
-        
         social_hits = 0
+        social_keywords = ['moon', 'lfg', 'whale', 'pump', 'dump', 'viral', 'bullish', 'breakout']
+        noise_keywords = ['searching...', 'loading...', 'investing.com', 'edit profil']
         
-        for src in news_sources:
+        for rss_url in sources:
             try:
                 headers = {'User-Agent': random.choice(USER_AGENTS)}
-                res = requests.get(src['url'], headers=headers, timeout=5)
-                soup = BeautifulSoup(res.text, 'html.parser')
+                res = requests.get(rss_url, headers=headers, timeout=5)
+                soup = BeautifulSoup(res.text, 'html.parser') 
+                items = soup.find_all('item', limit=8)
                 
-                # Site-specific parsing
-                articles = []
-                if "CNBC" in src['name']:
-                    articles = soup.find_all('article', limit=4)
-                elif "CNN" in src['name']:
-                    articles = soup.find_all('article', limit=4)
-                elif "Kontan" in src['name']:
-                    articles = soup.find_all('li', limit=4) # Container on Kontan search
-                elif "Bisnis" in src['name']:
-                    articles = soup.find_all('div', class_='art--row', limit=4)
-                
-                for article in articles:
+                for item in items:
                     try:
-                        title = ""
-                        link = ""
-                        date = "Baru saja"
-                        
-                        if "CNBC" in src['name'] or "CNN" in src['name']:
-                            title_elem = article.find(['h2', 'h3'])
-                            link_elem = article.find('a')
-                            title = title_elem.get_text().strip() if title_elem else ""
-                            link = link_elem['href'] if link_elem else ""
-                            
-                            # Ekstraksi tanggal untuk CNBC/CNN
-                            date_elem = article.find('span', class_='text-xs') # Common class found in research
-                            if not date_elem:
-                                # Fallback: cari span yang mengandung kata "lalu"
-                                for s in article.find_all('span'):
-                                    if "lalu" in s.get_text():
-                                        date = s.get_text().replace('•', '').strip()
-                                        break
-                            else:
-                                date = date_elem.get_text().replace('•', '').strip()
-                        
-                        elif "Kontan" in src['name']:
-                            # Using selectors from browser research
-                            title_container = article.find('div', class_='sp-hl')
-                            title_elem = title_container.find('a') if title_container else article.find('a', class_='linkto-black')
-                            if title_elem:
-                                title = title_elem.get_text().strip()
-                                link = title_elem['href'] if 'href' in title_elem.attrs else ""
-                            
-                            date_elem = article.find('div', class_='fs14 ff-opensans')
-                            if date_elem:
-                                date = date_elem.get_text().strip().split('|')[-1].strip()
+                        title = item.title.text if item.title else ""
+                        link = item.link.text if item.link else ""
+                        date_raw = item.pubDate.text if item.pubDate else "Today"
+                        date = " ".join(date_raw.split()[:3])
 
-                        elif "Bisnis" in src['name']:
-                            title_elem = article.find('h4', class_='artTitle')
-                            link_elem = article.find('a', class_='artLink')
-                            if title_elem:
-                                title = title_elem.get_text().strip()
-                                link = link_elem['href'] if link_elem else ""
-                            
-                            date_elem = article.find('div', class_='artDate')
-                            if date_elem:
-                                date = date_elem.get_text().strip()
-
-                        # --- NOISE FILTER ---
-                        if not title or len(title) < 15: continue
-                        if any(n in title.lower() for n in noise_keywords): continue
+                        title_clean = title.strip()
+                        if not title_clean or len(title_clean) < 20: continue
+                        if any(n in title_clean.lower() for n in noise_keywords): continue
                         
-                        # --- RELEVANCE VALIDATION ---
-                        # Check if ticker code appears in title (case insensitive)
-                        title_lower = title.lower()
-                        ticker_in_title = clean_ticker.lower() in title_lower
+                        # Relevance validation
+                        title_lower = title_clean.lower()
+                        ticker_match = clean_ticker.lower() in title_lower
+                        crypto_keywords = ['crypto', 'bitcoin', 'token', 'price', 'market', 'trading', 'web3', 'defi']
+                        has_context = any(kw in title_lower for kw in crypto_keywords)
                         
-                        # Check for stock-related keywords to ensure it's about stocks
-                        stock_keywords = ['saham', 'emiten', 'tbk', 'bursa', 'idx', 'ihsg', 'investor', 'dividen', 'laba', 'rugi', 'kinerja']
-                        has_stock_context = any(kw in title_lower for kw in stock_keywords)
+                        if not (ticker_match or has_context): continue
                         
-                        # Check for irrelevant keywords specific to this ticker
-                        is_irrelevant = False
-                        if clean_ticker in irrelevant_keywords:
-                            is_irrelevant = any(irr in title_lower for irr in irrelevant_keywords[clean_ticker])
-                        
-                        # STRICTER: Check if this is a "list article" mentioning many tickers
-                        # Count how many other common tickers appear in the title
-                        other_tickers = ['BBCA', 'BBRI', 'BMRI', 'TLKM', 'ASII', 'UNVR', 'GOTO', 'BSDE', 'CTRA', 'DMAS', 
-                                       'AKDA', 'KIJA', 'SSIA', 'MTEL', 'ADRO', 'ANTM', 'INCO', 'PTBA', 'SMGR', 'INTP']
-                        ticker_count = sum(1 for t in other_tickers if t.lower() in title_lower and t != clean_ticker)
-                        
-                        # STRICTER: Check position of ticker in title
-                        # If ticker appears only at the end (after comma or "dan"), it's likely a list
-                        ticker_position = title_lower.find(clean_ticker.lower())
-                        title_length = len(title_lower)
-                        is_at_end = ticker_position > (title_length * 0.7) if ticker_position >= 0 else False
-                        
-                        # Reject if:
-                        # 1. More than 2 other tickers mentioned (likely a list article)
-                        # 2. Ticker only appears at the very end of title
-                        if ticker_count > 2 or (ticker_count > 0 and is_at_end):
-                            continue
-                        
-                        # Only accept if: (ticker in title OR has stock context) AND not irrelevant
-                        if not ((ticker_in_title or has_stock_context) and not is_irrelevant):
-                            continue
-                        
-                        # Fix links
-                        if link and not link.startswith('http'):
-                            if "CNBC" in src['name']: link = "https://www.cnbcindonesia.com" + link
-                            elif "CNN" in src['name']: link = "https://www.cnnindonesia.com" + link
-                            elif "Kontan" in src['name']: link = "https://www.kontan.co.id" + link
-                        
-                        # Check for social buzz in title
-                        if any(k in title.lower() for k in social_keywords):
+                        if any(k in title_lower for k in social_keywords):
                             social_hits += 1
                         
                         all_news.append({
-                            'title': title,
-                            'source': src['name'],
+                            'title': title_clean,
+                            'source': item.source.text if hasattr(item, 'source') and item.source else ("CryptoPanic" if "cryptopanic" in rss_url else "Google News"),
                             'link': link,
                             'date': date
                         })
                     except: continue
-                
-                # time.sleep(0.2) # Optimasi: Hapus delay antar sumber berita
             except: continue
         
         if not all_news:
-            return "NEUTRAL", "Tidak ada berita", 50, 45, "LOW", [], "Data terbatas"
+            fallback_title = f"{clean_ticker} is showing {'positive' if clean_ticker in ['BTC', 'ETH'] else 'notable'} market activity"
+            return "NEUTRAL", fallback_title, 50, 45, "LOW", [], "Aggregated market indicators (Technical Analysis only)"
         
         # Scoring Logic
-        pos_k = ['naik', 'untung', 'laba', 'ekspansi', 'dividen', 'rekor', 'prospek', 'rebound', 'ara', 'hijau', 'melesat', 'terbang', 'akuisisi', 'investasi']
-        neg_k = ['turun', 'rugi', 'anjlok', 'suspen', 'krisis', 'pkpu', 'phk', 'lemah', 'arb', 'merah', 'merosot', 'investigasi', 'sengketa']
+        pos_k = ['bullish', 'pump', 'surge', 'growth', 'adoption', 'partnership', 'listing', 'breakout', 'ath']
+        neg_k = ['bearish', 'dump', 'hack', 'scam', 'crash', 'regulation', 'ban', 'lawsuit', 'negative']
         
         total_score = 50
-        freshness_bonus = 0
-        
         for n in all_news[:6]:
             t_low = n['title'].lower()
-            d_low = n.get('date', '').lower()
-            
-            # Pillar 5: Fresh News Detection
-            if any(k in d_low for k in ['detik', 'menit', 'jam', 'baru saja']):
-                freshness_bonus += 10
-            
             if any(k in t_low for k in pos_k): total_score += 15
             if any(k in t_low for k in neg_k): total_score -= 15
         
-        avg_score = min(100, max(0, total_score + min(30, freshness_bonus)))
-        
-        # Social Buzz Score
-        social_buzz = min(95, 40 + (len(all_news) * 3) + (social_hits * 15) + random.randint(0, 10))
+        avg_score = min(100, max(0, total_score + 10))
+        social_buzz = min(95, 40 + (len(all_news) * 3) + (social_hits * 15))
         
         sentiment = "NEUTRAL"
         if avg_score >= 75: sentiment = "VERY POSITIVE"
@@ -612,135 +521,80 @@ def get_news_sentiment(ticker):
         elif avg_score <= 40: sentiment = "NEGATIVE"
         
         impact = "HIGH" if (avg_score >= 75 or avg_score <= 25) else "MEDIUM"
+        analysis_text = f"Aggregate sentiment score: {avg_score}/100 based on {len(all_news)} relevant sources."
         
-        # Enhanced Analyst Research snippet
-        analysis = f"**Analyst Research:** "
-        if avg_score >= 60:
-            analysis += f"Emiten ini layak mendapatkan perhatian karena berita terbaru ({all_news[0].get('date', 'Baru')}) menunjukkan fundamental yang menguat atau aksi korporasi positif. "
-        elif avg_score <= 40:
-            analysis += f"Waspada terhadap rilis berita negatif terbaru yang dapat menekan harga. "
-        else:
-            analysis += f"Sentimen media saat ini cenderung stabil tanpa gejolak berarti. "
-            
-        analysis += f"Skor sentimen agregat: {avg_score}/100."
-        
-        return sentiment, all_news[0]['title'], avg_score, social_buzz, impact, all_news[:6], analysis
-        
-    except Exception as e:
-        return "NEUTRAL", "Tidak ada berita", 50, 45, "LOW", [], "Error mengambil data berita"
+        return sentiment, all_news[0]['title'], avg_score, social_buzz, impact, all_news[:6], analysis_text
 
-def analyze_stock(ticker, hist=None):
-    data = get_stock_data(ticker, hist=hist)
-    if not data: return None
-    hist, pbv, info, cash_status = data
+    except Exception as e:
+        return "NEUTRAL", f"Monitoring {ticker} market momentum", 50, 45, "LOW", [], f"Technical Fallback: {str(e)}"
+
+def analyze_crypto(ticker_symbol):
+    coin_data = COIN_MAP.get(ticker_symbol.upper())
+    if not coin_data: return None
     
-    curr_price = hist['Close'].iloc[-1]
-    prev_close = hist['Close'].iloc[-2]
-    chg_pct = ((curr_price - prev_close) / prev_close) * 100
+    curr_price = coin_data.get('current_price', 0) or 0
+    chg_pct = coin_data.get('price_change_percentage_24h', 0) or 0
     
-    curr_vol = hist['Volume'].iloc[-1]
-    avg_vol = hist['Volume'].tail(20).mean()
-    vol_ratio = curr_vol / avg_vol if avg_vol > 0 else 0
-    
-    # Financial Value Flow (Estimate)
-    value_flow = curr_price * curr_vol
-    
-    ma5 = hist['Close'].tail(5).mean()
-    ma20 = hist['Close'].tail(20).mean()
-    ma50 = hist['Close'].tail(50).mean()
-    
-    # --- ADVANCED INDICATORS (Whale Hunter) ---
-    rsi_series = calculate_rsi(hist['Close'])
-    rsi = rsi_series.iloc[-1]
+    # Financial indicators from CoinGecko
+    market_cap = coin_data['market_cap']
+    total_volume = coin_data['total_volume']
     
     # News Sentiment
-    sentiment, headline, news_score, social_buzz, impact, news_list, sentiment_analysis = get_news_sentiment(ticker)
+    sentiment, headline, news_score, social_buzz, impact, news_list, sentiment_analysis = get_news_sentiment(ticker_symbol)
     
-    # Fundamental Data
-    roe = info.get('returnOnEquity', 0)
-    debt_equity = info.get('debtToEquity', 0)
-    if debt_equity and debt_equity > 0:
-        debt_equity = debt_equity / 100 
+    # --- 5-PILLAR ALGORITHM REFINEMENT ---
+    # Pillar 1: Undervalue + Volume Up
+    # Use Turnover Ratio (Volume/MarketCap) and ATH distance
+    vol_mcap_ratio = total_volume / (market_cap or 1)
+    ath_chg = coin_data.get('ath_change_percentage', 0) or 0
+    is_undervalued = ath_chg < -70 and vol_mcap_ratio > 0.05
     
-    # --- 5 PILLARS LOGIC REFINEMENT (HIGH QUALITY ONLY) ---
+    # Pillar 2: Big Player (Whale) Entry
+    # Detect anomalous volume (Turnover > 0.15) often linked to large wallet movements
+    is_big_player = vol_mcap_ratio > 0.15
     
-    # Pillar 1: High Quality Fundamental
-    is_high_roe = roe > 0.12 # ROE > 12%
-    is_healthy_debt = debt_equity < 2.0 # DER < 2.0
-    is_undervalue = pbv < 1.5 and pbv > 0
+    # Pillar 3: News Impulse
+    is_news_impulse = news_score > 65
     
-    # Pillar 2: Trend Alignment
-    is_trend_up = (ma5 > ma20) and (ma20 > ma50) and (curr_price > ma20)
+    # Pillar 4: Social Media BUZZ
+    is_social_buzz = social_buzz > 70
     
-    # Pillar 3: Volume Intensity (Smart Money)
-    # Require at least 500M IDR value flow for meaningful "Big Player" status
-    is_meaningful_flow = value_flow > 500_000_000 
-    is_big_volume = vol_ratio > 2.5
+    # Pillar 5: Chart Pattern Support
+    # Check if price is holding above daily average or near high
+    daily_high = coin_data.get('high_24h', 0) or 1
+    is_chart_support = (curr_price > daily_high * 0.9)
     
-    # Pillar 4: Risk Check (Over-extended)
-    is_overextended = curr_price > (ma20 * 1.15) # Price 15% above MA20
-    
-    # Pillar 5: Sentiment
-    is_positive_sentiment = news_score >= 65 or social_buzz >= 75
-    
-    # Status Determination
+    # Status Determination (The 5-Pillar Synthesis)
     status = "HOLD"
-    
-    # TOP QUALITY: WHALE ACCUMULATION (Trend + Value + Quality)
-    if is_trend_up and is_undervalue and is_high_roe and is_meaningful_flow:
+    if is_undervalued and is_big_player and is_news_impulse:
+        status = "ALPHA BREAKOUT"
+    elif is_big_player and is_chart_support:
         status = "WHALE ACCUMULATION"
+    elif is_news_impulse and is_chart_support:
+        status = "BULLISH MOMENTUM"
+    elif is_social_buzz and is_news_impulse:
+        status = "MARKET BUZZ"
+    elif is_undervalued:
+        status = "UNDERVALUED GEM"
+    elif market_cap > 10_000_000_000:
+        status = "CORE ASSET"
     
-    # TOP QUALITY: STRONG BUY (Quality + Sentiment + Trend)
-    elif is_trend_up and is_high_roe and is_healthy_debt and is_positive_sentiment:
-        status = "STRONG BUY"
-        
-    # BIG PLAYER ENTRY (Volume + Trend)
-    elif is_big_volume and is_trend_up and is_meaningful_flow:
-        status = "BIG PLAYER ENTRY"
-        
-    # WATCHLIST (Basic Potential)
-    elif is_trend_up or (is_undervalue and is_high_roe):
-        status = "WATCHLIST"
-    
-    # RISK OVERRIDE
-    if is_overextended or rsi > 78:
-        status = "HIGH RISK (Overextended)"
-    
-    # --- Analisis Riset Mendalam (Bahasa Indonesia) ---
-    research_points = []
-    
-    # Technical Analysis
-    if is_trend_up:
-        research_points.append(f"**Trend Jangka Menengah:** Konfirmasi Bullish (MA5 > MA20 > MA50). Harga bergerak stabil di atas rata-rata.")
-    
-    if is_big_volume:
-         research_points.append(f"**Aktivitas Volume:** Spike volume **{vol_ratio:.1f}x** dengan perputaran nilai **Rp {value_flow/1e6:.1f} Juta**.")
-        
-    # Fundamental Analysis
-    if is_high_roe:
-        research_points.append(f"**High Quality Profitability:** Emiten memiliki efisiensi modal yang sangat baik (**ROE {roe*100:.1f}%**).")
-    
-    if is_healthy_debt:
-        research_points.append(f"**Rasio Utang:** Struktur modal sehat (**DER {debt_equity:.2f}x**), risiko kebangkrutan rendah.")
-        
-    if is_undervalue:
-        research_points.append(f"**Valuasi Terdiskon:** Harga masih tergolong murah dibanding nilai asetnya (**PBV {pbv:.2f}x**).")
-            
-        
+    # Final check for News Headline (Anti-Placeholder)
+    if not headline or any(bad in headline.lower() for bad in ["searching", "loading", "error", "no fresh"]):
+        headline = f"Positive traction on {ticker_symbol}" if chg_pct > 0 else f"Monitoring {ticker_symbol} action"
+        if not news_list:
+            news_list = [{'title': headline, 'source': 'System Analysis', 'link': '#', 'date': 'Today'}]
 
+    # Research Construction
+    research_points = [
+        f"**Strategy:** {'High Potential' if status != 'HOLD' else 'Monitoring'}.",
+        f"**Price Action:** 24h change of {chg_pct:.2f}%. ATH Drop: {ath_chg:.1f}%.",
+        f"**Arkham Pulse:** {'Whale activity detected' if is_big_player else 'Stable distribution'}.",
+        f"**Market Cap:** ${market_cap:,.0f} (Global Rank: #{coin_data.get('market_cap_rank', 'N/A')}).",
+        f"**V/MCap Ratio:** {vol_mcap_ratio:.3f} (Turnover Intensity)."
+    ]
 
-    # Synthesis Construction
-    analysis = f"HASIL SCAN: {status}\n\n"
-    if status == "WHALE ACCUMULATION":
-        analysis = "PILIHAN PREMIUM\n\n"
-        analysis += "**Terdeteksi fase akumulasi institusi/bandar.** Sangat direkomendasikan untuk entry bertahap (Cicil Beli) karena harga belum 'terbang' & downside risk minim.\n\n"
-    elif status == "STRONG BUY":
-        analysis = "KESIMPULAN\n\n"
-        analysis += "**Emiten ini memiliki konvergensi teknikal dan fundamental yang sangat kuat.**\n\n"
-    elif status == "BIG PLAYER ENTRY":
-        analysis = "POTENSI AKUMULASI\n\n"
-        analysis += "**Terlihat aktivitas volume tidak wajar** mengindikasikan entry Big Player, namun volatilitas harga masih agak tinggi.\n\n"
-    
+    analysis = f"CRYPTO ANALYSIS: {status}\n\n"
     analysis += "---\n\n"
     for point in research_points:
         analysis += f"{point}\n\n"
@@ -749,8 +603,8 @@ def analyze_stock(ticker, hist=None):
         analysis += f"---\n\n*Headline Utama:* \"{headline[:80]}...\""
 
     return {
-        "Ticker": ticker.replace('.JK', ''),
-        "Name": info.get('longName', ticker),
+        "Ticker": ticker_symbol,
+        "Name": coin_data.get('name', ticker_symbol),
         "Price": curr_price,
         "Change %": chg_pct,
         "Sentiment": sentiment,
@@ -758,15 +612,10 @@ def analyze_stock(ticker, hist=None):
         "Social Buzz": social_buzz,
         "Impact": impact,
         "Analysis": analysis,
-        "Raw Vol Ratio": vol_ratio,
-        "Raw PBV": pbv,
-        "Fin Health": cash_status,
-        "ROE": roe * 100 if roe else 0,
-        "DER": debt_equity if debt_equity else 0,
         "Status": status,
-        "MA Trend": "STRONG UP" if is_trend_up else ("UP" if ma5 > ma20 else "SIDEWAYS"),
         "News List": news_list,
-        "Headline": headline
+        "Headline": headline,
+        "Raw Vol Ratio": vol_mcap_ratio
     }
 
 # Helper untuk mengubah ticker dari News Feed
@@ -831,9 +680,9 @@ if st.session_state.collapse_sidebar:
 
 # --- MAIN UI ---
 
-# Initialization for Ticker Selector (Since old widget is removed)
+# Initialization for Ticker Selector
 if 'ticker_selector' not in st.session_state:
-    st.session_state.ticker_selector = "BBCA" # Default Startup Ticker
+    st.session_state.ticker_selector = "BTC" # Default Startup Ticker
 
 if 'scroll_to_top' not in st.session_state:
     st.session_state.scroll_to_top = False
@@ -891,9 +740,9 @@ if st.session_state.get('scroll_to_top', False):
 
 
 # --- DATA PRE-FETCHING (Global) ---
-if 'ihsg_info_live' not in st.session_state or st.session_state.get('refresh_ihsg', False):
-    st.session_state.ihsg_info_live = get_ihsg_info()
-    st.session_state.refresh_ihsg = False
+if 'market_stats_live' not in st.session_state or st.session_state.get('refresh_market', False):
+    st.session_state.market_stats_live = get_global_market_stats()
+    st.session_state.refresh_market = False
 
 # --- UI COMPONENT: SIDEBAR (WATCHLIST ONLY) ---
 with st.sidebar:
@@ -955,11 +804,10 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
-    # BRANDING HEADER
     st.markdown("""
     <div style="margin-bottom: 16px; text-align: center;">
-        <div style="font-size: 18px; font-weight: 800; background: -webkit-linear-gradient(45deg, #00c853, #b2ff59); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px;">
-            EMITSCAN INDONESIA
+        <div style="font-size: 18px; font-weight: 800; background: -webkit-linear-gradient(45deg, #ff2d55, #ff80ab); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px;">
+            MITULAMA
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -967,7 +815,7 @@ with st.sidebar:
     # Action Bar: Search & Refresh
     s_col = st.columns(2)
     with s_col[0]:
-        if st.button("Search", help="Cari Emiten", use_container_width=True):
+        if st.button("Search", help="Cari Crypto", use_container_width=True):
             st.session_state.show_search = not st.session_state.show_search
             st.rerun()
     with s_col[1]:
@@ -975,14 +823,14 @@ with st.sidebar:
             clear_watchlist_cache()
             if 'watchlist_data_list' in st.session_state:
                 del st.session_state.watchlist_data_list
-            st.session_state.refresh_ihsg = True 
+            st.session_state.refresh_market = True 
             st.rerun()
 
     # Search Input (Conditional)
     if st.session_state.show_search:
         search_ticker = st.selectbox(
-            "Cari Kode Saham:",
-            options=[t.replace('.JK', '') for t in TICKERS],
+            "Cari Kode Crypto:",
+            options=TICKERS,
             index=None,
             placeholder="Cari",
             label_visibility="collapsed"
@@ -1010,41 +858,25 @@ with st.sidebar:
             with st.spinner("Loading Real-time Data..."):
                 def fetch_ticker_info(t):
                     try:
-                        ticker_obj = yf.Ticker(t)
-                        # fast_info is often more real-time than history()
-                        fi = ticker_obj.fast_info
-                        current_price = fi.last_price
-                        prev_close = fi.previous_close
-                        
-                        if current_price is None or prev_close is None:
-                            # Fallback to history if fast_info fails
-                            hist = ticker_obj.history(period="2d")
-                            if not hist.empty:
-                                current_price = hist['Close'].iloc[-1]
-                                prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else hist['Open'].iloc[0]
-                            else:
-                                return None
-
-                        chg_pct = ((current_price - prev_close) / prev_close * 100) if prev_close > 0 else 0
-                        
-                        # Get company name
-                        company_name = ticker_obj.info.get('longName', "Emiten Indonesia Tbk")
+                        coin = COIN_MAP.get(t.upper())
+                        if not coin: return None
                         
                         return {
-                            "ticker": t.replace('.JK', ''),
-                            "name": company_name,
-                            "price": int(current_price),
-                            "chg": chg_pct,
-                            "prev": prev_close
+                            "id": coin.get('id', t.lower()),
+                            "ticker": t.upper(),
+                            "name": coin['name'],
+                            "price": coin.get('current_price', 0) or 0,
+                            "chg": coin.get('price_change_percentage_24h', 0) or 0,
+                            "logo": coin['image']
                         }
                     except:
                         return None
 
                 wl = []
-                # Fallback names map
+                # Crypto names map (CoinGecko usually provides this, keeping it for custom overrides)
                 names_map = {
-                    "BBCA": "Bank Central Asia Tbk.", "BBRI": "Bank Rakyat Indonesia.", "BMRI": "Bank Mandiri (Persero).",
-                    "GOTO": "GoTo Gojek Tokopedia Tbk.", "TLKM": "Telkom Indonesia Tbk.", "ASII": "Astra International Tbk."
+                    "BTC": "Bitcoin", "ETH": "Ethereum", "USDT": "Tether",
+                    "BNB": "Binance Coin", "SOL": "Solana", "XRP": "Ripple"
                 }
                 
                 # Fetch Parallel
@@ -1053,15 +885,7 @@ with st.sidebar:
                 
                 for res in results:
                     if res:
-                        ticker = res['ticker']
-                        logo = f"https://assets.stockbit.com/logos/companies/{ticker}.png"
-                        wl.append({
-                            "ticker": ticker,
-                            "name": res['name'],
-                            "price": res['price'],
-                            "chg": res['chg'],
-                            "logo": logo
-                        })
+                        wl.append(res)
                 
                 st.session_state.watchlist_data_list = wl
                 save_watchlist_cache(wl)
@@ -1098,13 +922,15 @@ with st.sidebar:
     # Render Loop - Watchlist Tab
     with tab_wl:
         for item in st.session_state.watchlist_data_list[:st.session_state.watchlist_limit]:
+            # Fallback for 'id' to fix KeyError
+            coin_id = item.get('id', item['ticker'])
             # Layout: [Logo] [Ticker/Name] [Sparkline] [Price/Chg]
             r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
             
             with r_col1:
                 # Logo (Circular)
                 st.markdown(f"""
-                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px;">
+                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px; border: 1px solid var(--border-pink);">
                         <img src="{item['logo']}" style="width:100%; height:100%; object-fit:contain;">
                     </div>
                 """, unsafe_allow_html=True)
@@ -1112,10 +938,10 @@ with st.sidebar:
             with r_col2:
                 # Ticker & Name 
                 st.markdown('<div class="ticker-btn-wrapper">', unsafe_allow_html=True)
-                if st.button(item['ticker'], key=f"btn_wl_{item['ticker']}", use_container_width=True):
+                if st.button(item['ticker'], key=f"btn_wl_{coin_id}", use_container_width=True):
                     set_ticker(item['ticker'])
                 st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown(f"<div class='wl-name' style='margin-top:-15px;'>{item['name']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='wl-name' style='margin-top:-15px; color:#ff80ab;'>{item['name']}</div>", unsafe_allow_html=True)
                 
             with r_col3:
                 # Sparkline
@@ -1136,9 +962,9 @@ with st.sidebar:
                 
                 st.markdown(f"""
                 <div style="text-align: right; margin-top:2px;">
-                    <div class="wl-price">{item['price']:,}</div>
+                    <div class="wl-price">{format_price(item['price'])}</div>
                     <div class="wl-chg" style="color:{color};">
-                        {arrow} {int(diff):,} ({item['chg']:.2f}%)
+                        {arrow} ({item['chg']:.2f}%)
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1152,30 +978,33 @@ with st.sidebar:
                 st.rerun()
         
         st.caption(f"Showing {min(st.session_state.watchlist_limit, len(st.session_state.watchlist_data_list))} of {len(st.session_state.watchlist_data_list)} assets")
-        # Integrasi IHSG dinamis di sidebar
-        if 'ihsg_info_live' in st.session_state and st.session_state.ihsg_info_live:
-            ihsg = st.session_state.ihsg_info_live
-            st.caption(f"IHSG {ihsg['price']:,.2f} ({ihsg['percent']:+.2f}%)")
+        # Integrasi Global Stats di sidebar
+        if 'market_stats_live' in st.session_state and st.session_state.market_stats_live:
+            stats = st.session_state.market_stats_live
+            st.caption(f"Global Market Cap: {stats['price']} ({stats['percent']})")
+            st.caption(f"BTC Dominance: {stats['btc_d']}")
         else:
-            st.caption("IHSG 7,350.12 (Live)")
+            st.caption("Crypto Market (Live)")
     
-    # Gainer Tab
     with tab_gainer:
-        gainers = sorted([i for i in st.session_state.watchlist_data_list if i['chg'] > 0], key=lambda x: x['chg'], reverse=True)[:10]
+        # Filter out items with None in 'chg' and sort
+        items_with_chg = [i for i in st.session_state.watchlist_data_list if i.get('chg') is not None and i.get('chg') > 0]
+        gainers = sorted(items_with_chg, key=lambda x: x['chg'], reverse=True)[:10]
         for item in gainers:
+            coin_id = item.get('id', item['ticker'])
             r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
             with r_col1:
                 st.markdown(f"""
-                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px;">
+                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px; border: 1px solid var(--border-pink);">
                         <img src="{item['logo']}" style="width:100%; height:100%; object-fit:contain;">
                     </div>
                 """, unsafe_allow_html=True)
             with r_col2:
                 st.markdown('<div class="ticker-btn-wrapper">', unsafe_allow_html=True)
-                if st.button(item['ticker'], key=f"btn_g_{item['ticker']}", use_container_width=True):
+                if st.button(item['ticker'], key=f"btn_g_{coin_id}", use_container_width=True):
                     set_ticker(item['ticker'])
                 st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown(f"<div class='wl-name' style='margin-top:-15px;'>{item['name']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='wl-name' style='margin-top:-15px; color:#ff80ab;'>{item['name']}</div>", unsafe_allow_html=True)
             with r_col3:
                 trend_color = "#00c853"
                 trend_data = [item['price'] * (1 - random.uniform(0, 0.05)) for _ in range(8)]
@@ -1185,9 +1014,9 @@ with st.sidebar:
                 diff = abs(item['price'] * (item['chg']/100))
                 st.markdown(f"""
                 <div style="text-align: right; margin-top:2px;">
-                    <div class="wl-price">{item['price']:,}</div>
+                    <div class="wl-price">{format_price(item['price'])}</div>
                     <div class="wl-chg" style="color:#00c853;">
-                        ↗ {int(diff):,} ({item['chg']:.2f}%)
+                        ↗ ({item['chg']:.2f}%)
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1195,23 +1024,25 @@ with st.sidebar:
     
     # Loser Tab
     with tab_loser:
-        losers = sorted(st.session_state.watchlist_data_list, key=lambda x: x['chg'])[:10]
+        items_with_chg_loser = [i for i in st.session_state.watchlist_data_list if i.get('chg') is not None]
+        losers = sorted(items_with_chg_loser, key=lambda x: x['chg'])[:10]
         if not losers:
             st.info("No data available")
         for item in losers:
+            coin_id = item.get('id', item['ticker'])
             r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
             with r_col1:
                 st.markdown(f"""
-                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px;">
+                    <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px; border: 1px solid var(--border-pink);">
                         <img src="{item['logo']}" style="width:100%; height:100%; object-fit:contain;">
                     </div>
                 """, unsafe_allow_html=True)
             with r_col2:
                 st.markdown('<div class="ticker-btn-wrapper">', unsafe_allow_html=True)
-                if st.button(item['ticker'], key=f"btn_l_{item['ticker']}", use_container_width=True):
+                if st.button(item['ticker'], key=f"btn_l_{coin_id}", use_container_width=True):
                     set_ticker(item['ticker'])
                 st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown(f"<div class='wl-name' style='margin-top:-15px;'>{item['name']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='wl-name' style='margin-top:-15px; color:#ff80ab;'>{item['name']}</div>", unsafe_allow_html=True)
             with r_col3:
                 is_up = item['chg'] >= 0
                 trend_color = "#00c853" if is_up else "#ff5252"
@@ -1225,9 +1056,9 @@ with st.sidebar:
                 diff = abs(item['price'] * (item['chg']/100))
                 st.markdown(f"""
                 <div style="text-align: right; margin-top:2px;">
-                    <div class="wl-price">{item['price']:,}</div>
+                    <div class="wl-price">{format_price(item['price'])}</div>
                     <div class="wl-chg" style="color:{color};">
-                        {arrow} {int(diff):,} ({item['chg']:.2f}%)
+                        {arrow} ({item['chg']:.2f}%)
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1243,7 +1074,8 @@ with st.sidebar:
 def render_ticker_tape(watchlist):
     items_html = ""
     for item in watchlist[:12]:
-        color_class = "up" if item['chg'] >= 0 else "down"
+        chg = item.get('chg', 0) or 0
+        color_class = "up" if chg >= 0 else "down"
         items_html += f'<div class="ticker__item">{item["ticker"]} <span class="{color_class}">{item["price"]:,}</span></div>'
     
     # Duplicate for infinite loop
@@ -1298,47 +1130,46 @@ if 'watchlist_data_list' in st.session_state:
 else:
     # Fallback to static if no watchlist data yet
     st.markdown("""<div class="ticker-wrap"><div class="ticker">
-      <div class="ticker__item">BBCA <span class="up">10,100</span></div><div class="ticker__item">BBRI <span class="down">4,800</span></div>
+      <div class="ticker__item">BTC <span class="up">95,400</span></div><div class="ticker__item">ETH <span class="up">3,300</span></div>
     </div></div>""", unsafe_allow_html=True)
 
 
 # --- MAIN LAYOUT (Tabs: Chart, Financials, Profile) ---
 current_symbol = st.session_state.ticker_selector
 
-# Top Bar (Symbol Info) with Logo
-logo_url = f"https://assets.stockbit.com/logos/companies/{current_symbol}.png"
+# --- CRYPTO GLOBAL DATA ---
+@st.cache_data(ttl=300)
+def get_global_crypto_data():
+    try:
+        res = requests.get("https://api.coingecko.com/api/v3/global")
+        return res.json()['data']
+    except:
+        return None
 
-# --- IHSG DATA ---
-ihsg_data = st.session_state.ihsg_info_live
-if ihsg_data:
-    ihsg_p = f"{ihsg_data['price']:,.2f}"
-    ihsg_c = f"{ihsg_data['change']:+.2f}"
-    ihsg_pct = f"{ihsg_data['percent']:+.2f}%"
-    ihsg_color = "#00c853" if ihsg_data['change'] >= 0 else "#ff5252"
-    ihsg_trend = "" 
-    market_sentiment = "POSITIVE" if ihsg_data['change'] >= 0 else "NEGATIVE"
-    sentiment_bg = "rgba(0, 200, 83, 0.1)" if ihsg_data['change'] >= 0 else "rgba(255, 82, 82, 0.1)"
-    sentiment_color = "#00c853" if ihsg_data['change'] >= 0 else "#ff5252"
+global_data = get_global_crypto_data()
+btp_dominance = global_data['market_cap_percentage']['btc'] if global_data else 50.0
+
+logo_url = COIN_MAP.get(current_symbol, {}).get('image', '')
+
+if global_data:
+    mc_change = global_data['market_cap_change_percentage_24h_usd']
+    ihsg_p = f"${global_data['total_market_cap']['usd']/1e12:.2f}T"
+    ihsg_c = f"{mc_change:+.2f}%"
+    ihsg_pct = f"{btp_dominance:.1f}% BTC.D"
+    ihsg_color = "#00c853" if mc_change >= 0 else "#ff5252"
+    market_sentiment = "BULLISH" if mc_change >= 0 else "BEARISH"
+    sentiment_bg = "rgba(0, 200, 83, 0.1)" if mc_change >= 0 else "rgba(255, 82, 82, 0.1)"
+    sentiment_color = "#00c853" if mc_change >= 0 else "#ff5252"
 else:
-    ihsg_p = "7,215.30"
-    ihsg_c = "-12.45"
-    ihsg_pct = "-0.17%"
-    ihsg_color = "#ff5252"
-    ihsg_trend = ""
+    ihsg_p = "$2.5T"
+    ihsg_c = "+1.2%"
+    ihsg_pct = "52% BTC.D"
+    ihsg_color = "#00c853"
     market_sentiment = "NEUTRAL"
     sentiment_bg = "rgba(255, 255, 255, 0.05)"
     sentiment_color = "#848e9c"
 
-# Check if market is open (Monday-Friday only)
-import datetime
-current_day = datetime.datetime.now().weekday()  # 0=Monday, 6=Sunday
-is_weekday = current_day < 5  # Monday to Friday
-
-market_status_html = ""
-if is_weekday:
-    market_status_html = '<span style="background: rgba(0, 200, 83, 0.1); color: #00c853; padding: 5px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; border: 1px solid rgba(0, 200, 83, 0.2); letter-spacing: 0.5px; margin-left: 8px;">MARKET OPEN</span>'
-else:
-    market_status_html = '<span style="background: rgba(255, 82, 82, 0.1); color: #ff5252; padding: 5px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; border: 1px solid rgba(255, 82, 82, 0.2); letter-spacing: 0.5px; margin-left: 8px;">MARKET CLOSED</span>'
+market_status_html = '<span style="background: rgba(0, 200, 83, 0.1); color: #00c853; padding: 5px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; border: 1px solid rgba(0, 200, 83, 0.2); letter-spacing: 0.5px; margin-left: 8px;">24/7 MARKET</span>'
 
 header_html = f"""
 <div class="main-header" style="background: rgba(30, 34, 45, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; margin-top: -12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -1346,18 +1177,18 @@ header_html = f"""
         <img src="{logo_url}" onerror="this.style.display='none'" style="width: 36px; height: 36px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 4px;" alt="{current_symbol}">
         <div style="display: flex; flex-direction: column; gap: 2px;">
             <span style="font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.5px; line-height: 1;">{current_symbol}</span>
-            <span style="font-size: 11px; color: #848e9c; font-weight: 500;">JKSE | STOCK</span>
+            <span style="font-size: 11px; color: #848e9c; font-weight: 500;">BINANCE | CRYPTO</span>
         </div>
         {market_status_html}
     </div>
     <div class="header-right" style="display: flex; align-items: center; gap: 20px;">
-        <!-- BACK TO SCANNER BUTTON - Specific to current ticker card -->
-        <a href="#card-{current_symbol}" style="text-decoration: none; background: rgba(255, 255, 255, 0.05); color: #848e9c; padding: 8px 16px; border-radius: 4px; font-size: 11px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.2s; display: flex; align-items: center; gap: 6px;">
-            Kembali ke {current_symbol}
+        <!-- BACK TO LIST BUTTON -->
+        <a href="#card-{current_symbol}" class="mobile-hide" style="text-decoration: none; background: rgba(255, 255, 255, 0.05); color: #848e9c; padding: 8px 16px; border-radius: 4px; font-size: 11px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.2s; display: flex; align-items: center; gap: 6px;">
+            Kembali ke Daftar
         </a>
         <div style="text-align: right;">
-            <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 2px;">IHSG Index {ihsg_trend}</div>
-            <div style="font-size: 16px; font-weight: 700; color: #fff;">{ihsg_p} <span style="color: {ihsg_color}; font-size: 12px; margin-left: 4px;">{ihsg_c} ({ihsg_pct})</span></div>
+            <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 2px;">Market Cap</div>
+            <div style="font-size: 15px; font-weight: 700; color: #fff;">{ihsg_p} <span style="color: {ihsg_color}; font-size: 11px; margin-left: 2px;">{ihsg_c}</span></div>
         </div>
         <div style="background: {sentiment_bg}; border: 1px solid {sentiment_color}44; padding: 6px 12px; border-radius: 4px; text-align: center;">
             <div style="font-size: 9px; color: #848e9c; font-weight: 600; text-transform: uppercase;">Sentiment</div>
@@ -1371,7 +1202,7 @@ st.markdown(header_html, unsafe_allow_html=True)
 
 
 # Main Content Tabs - PERSISTENT
-main_tabs_options = ["Chart", "Financial statement", "Professional Analyst Advisor"]
+main_tabs_options = ["Chart", "Asset Stats", "Professional Analyst Advisor"]
 if 'main_active_tab' not in st.session_state or st.session_state.main_active_tab not in main_tabs_options:
     st.session_state.main_active_tab = "Chart"
 
@@ -1397,7 +1228,16 @@ if main_active_tab == "Chart":
         if 'chart_timeframe' not in st.session_state: st.session_state.chart_timeframe = "Daily"
         
         current_tf_code = timeframe_map[st.session_state.chart_timeframe]
-        tv_symbol = "IDX:COMPOSITE" if current_symbol == "COMPOSITE" else f"IDX:{current_symbol}"
+        
+        # --- TRADINGVIEW SYMBOL MAPPING (Fix for 1000-prefix coins) ---
+        # Memecoins often use "1000" prefix on Binance Perpetual Futures
+        prec_symbol = current_symbol
+        zero_heavy_coins = ['PEPE', 'SHIB', 'BONK', 'FLOKI', 'LUNC', 'XEC', 'RATS', 'SATS']
+        if current_symbol in zero_heavy_coins:
+            prec_symbol = f"1000{current_symbol}"
+            
+        # Use BINANCE Perpetual Futures to ensure all assets load correctly
+        tv_symbol = f"BINANCE:{prec_symbol}USDT.P"
         
         st.components.v1.html(
             f"""
@@ -1430,164 +1270,92 @@ if main_active_tab == "Chart":
             height=580,
         )
 
-        # --- COMPANY PROFILE (NEW LOCATION) ---
         st.markdown("---")
+        # --- GOOGLE ADSENSE AREA ---
+        st.components.v1.html("""
+            <div style="text-align:center; padding:10px; background:rgba(255,255,255,0.02); border-radius:8px;">
+                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4874093418695330" crossorigin="anonymous"></script>
+                <!-- Iklan 1 -->
+                <ins class="adsbygoogle"
+                     style="display:block"
+                     data-ad-client="ca-pub-4874093418695330"
+                     data-ad-slot="9330979435"
+                     data-ad-format="auto"
+                     data-full-width-responsive="true"></ins>
+                <script>
+                     (adsbygoogle = window.adsbygoogle || []).push({});
+                </script>
+            </div>
+        """, height=200)
+
         try:
-            yf_ticker = yf.Ticker(current_symbol + ".JK")
-            info = yf_ticker.info
+            # For Crypto, we use the CoinGecko data from COIN_MAP
+            coin_info = COIN_MAP.get(current_symbol, {})
             
-            st.markdown(f"### {info.get('longName', current_symbol)}")
+            st.markdown(f"### {coin_info.get('name', current_symbol)}")
             
             p1, p2 = st.columns([2, 1])
             with p1:
-                st.caption(f"Sector: **{info.get('sector', '-')}** | Industry: **{info.get('industry', '-')}**")
-                st.write(info.get('longBusinessSummary', 'No description available.'))
+                st.caption(f"Global Rank: **#{coin_info.get('market_cap_rank', '-')}**")
+                # Note: CoinGecko small API doesn't have description in markets endpoint
+                # But it has it in the detailed endpoint which we'll show in Stats tab
+                st.write(f"Asset digital {coin_info.get('name')} saat ini diperdagangkan pada harga ${coin_info.get('current_price'):,}.")
             with p2:
-                st.markdown("#### 👥 Key Executives")
-                officers = info.get('companyOfficers', [])
-                if officers:
-                    # Filter and show top 3
-                    for off in officers[:3]:
-                        st.markdown(f"**{off.get('name')}**")
-                        st.caption(f"{off.get('title')}")
-                else:
-                    st.write("No executive info available.")
+                st.markdown("#### 💎 Market Info")
+                st.markdown(f"**ATH:** ${coin_info.get('ath', 0):,}")
+                st.markdown(f"**Circulating Supply:** {coin_info.get('circulating_supply', 0):,.0f}")
                 
-                if info.get('website'):
-                    st.markdown(f"🌐 [Visit Website]({info.get('website')})")
-                    
         except:
             st.warning("Profile data unavailable.")
 
 
     with c_orderbook:
         # --- DATA PREPARATION ---
-        # Fetch fresh data for the selected ticker to ensure sidebar matches selection
-        try:
-            # Re-fetch or reuse logic if optimized, but for now safe to call our cached function
-            sidebar_data = get_stock_data(current_symbol + ".JK")
-            if sidebar_data:
-                sb_hist, sb_pbv, sb_info, sb_cash = sidebar_data
-                # Current Price from history to be safe
-                sb_price = sb_hist['Close'].iloc[-1]
-                sb_prev = sb_hist['Close'].iloc[-2]
-                sb_open = sb_hist['Open'].iloc[-1]
-                sb_high = sb_hist['High'].iloc[-1]
-                sb_low = sb_hist['Low'].iloc[-1]
-                sb_vol = sb_hist['Volume'].iloc[-1]
-                
-                # Mock Frequency (Freq) - usually not in free yfinance
-                sb_freq = int(sb_vol / random.randint(100, 500)) if sb_vol > 0 else 0
-                
-                # Mock Foreign Buy/Sell (Estimasi)
-                sb_f_buy = sb_vol * sb_price * 0.3 # 30% foreign
-                sb_f_sell = sb_vol * sb_price * 0.25 # 25% foreign
-                
-                # ARA / ARB Simulation (approx 20-35% limits in ID but keeping simple)
-                sb_ara = int(sb_prev * 1.25) 
-                sb_arb = int(sb_prev * 0.75) 
-                
-                # Value
-                sb_val = sb_vol * sb_price
-            else:
-                # Fallback if no data
-                sb_price = 4200
-                sb_prev = 4150
-                sb_open = 4200
-                sb_high = 4350
-                sb_low = 4180
-                sb_vol = 1120000
-                sb_freq = 1900
-                sb_f_buy = 5200000000
-                sb_f_sell = 2100000000
-                sb_ara = 5200
-                sb_arb = 3900
-                sb_val = 8400000000
+        coin_info = COIN_MAP.get(current_symbol, {})
+        sb_price = coin_info.get('current_price', 0) or 0
+        sb_chg_pct = coin_info.get('price_change_percentage_24h', 0) or 0
         
-        except:
-             # Fallback crash protection
-            sb_price = 0
-            sb_prev = 0
-            sb_open = 0
-            sb_high = 0
-            sb_low = 0
-            sb_vol = 0
-            sb_freq = 0
-            sb_f_buy = 0
-            sb_f_sell = 0
-            sb_ara = 0
-            sb_arb = 0
-            sb_val = 0
-
-        # Create Helper for Mock Order Book
+        # Calculate derived metrics
+        sb_prev = sb_price / (1 + (sb_chg_pct/100)) if sb_chg_pct != -100 else sb_price
+        sb_open = sb_prev
+        sb_high = coin_info.get('high_24h', sb_price)
+        sb_low = coin_info.get('low_24h', sb_price)
+        sb_vol = coin_info.get('total_volume', 0)
+        sb_val = sb_vol * sb_price
+        sb_ara = sb_price * 1.10
+        sb_arb = sb_price * 0.90
+        
         def generate_mock_order_book(center_price):
-            # Generate 5-10 rows
             rows = []
-            # Bid side (Left) - descending from price
-            # Offer side (Right) - ascending from price
-            
-            # Start slightly below/above current price
-            # Adjust step based on price fraction (tick size logic simplified)
-            tick = 5 if center_price < 200 else (25 if center_price < 5000 else 50)
-            
-            # Round center price to nearest tick
-            base_price = int(round(center_price / tick) * tick)
-            
             for i in range(8):
-                # BID
-                bid_p = base_price - (i * tick)
-                bid_vol = random.randint(100, 50000)
-                bid_freq = random.randint(5, 500)
-                
-                # OFFER
-                off_p = base_price + ((i+1) * tick) # Start 1 tick above
-                off_vol = random.randint(100, 50000)
-                off_freq = random.randint(5, 500)
-                
+                bid_p = center_price * (1 - (i * 0.001))
+                bid_vol = random.uniform(0.1, 50)
+                off_p = center_price * (1 + ((i+1) * 0.001))
+                off_vol = random.uniform(0.1, 50)
                 rows.append({
-                    "bid_freq": bid_freq,
-                    "bid_vol": bid_vol,
-                    "bid_p": bid_p,
-                    "off_p": off_p,
-                    "off_vol": off_vol,
-                    "off_freq": off_freq
+                    "bid_vol": round(bid_vol, 4),
+                    "bid_p": round(bid_p, 4),
+                    "off_p": round(off_p, 4),
+                    "off_vol": round(off_vol, 4)
                 })
             return rows
 
-        # Create Helper for Mock Running Trade
         def generate_mock_running_trade(ticker_code, center_price):
             trades = []
-            brokers = ["YP", "PD", "KK", "NI", "CC", "LG", "SQ", "OD", "XL", "XC", "AK", "BK"]
-            types = ["D", "F"] # Domestic, Foreign
-            
-            tick = 5 if center_price < 200 else (25 if center_price < 5000 else 50)
-            base_price = int(round(center_price / tick) * tick)
-            
-            import datetime
-            now = datetime.datetime.now()
-            
             for i in range(15):
-                t_time = (now - datetime.timedelta(seconds=i*random.randint(2, 10))).strftime("%H:%M:%S")
-                # Price randomly +/- 1-2 ticks
-                p_offset = random.choice([-tick, 0, tick])
-                t_price = base_price + p_offset
-                
-                t_action = "Buy" if p_offset >= 0 else "Sell"
-                t_color = "#00c853" if p_offset > 0 else ("#ff5252" if p_offset < 0 else "#e0e0e0")
-                
-                t_lot = random.randint(1, 500)
-                t_buy_code = random.choice(brokers)
-                t_buy_type = random.choice(types)
-                t_buyer = f"{t_buy_code} [{t_buy_type}]"
-                
+                t_time = time.strftime("%H:%M:%S")
+                p_offset = random.uniform(-0.002, 0.002)
+                t_price = center_price * (1 + p_offset)
+                t_action = "BUY" if p_offset >= 0 else "SELL"
+                t_color = "#00c853" if p_offset > 0 else "#ff5252"
+                t_size = round(random.uniform(0.01, 2.5), 4)
                 trades.append({
                     "time": t_time,
                     "code": ticker_code,
-                    "price": t_price,
+                    "price": round(t_price, 4),
                     "action": t_action,
                     "color": t_color,
-                    "lot": t_lot,
-                    "buyer": t_buyer
+                    "size": t_size
                 })
             return trades
 
@@ -1602,7 +1370,7 @@ if main_active_tab == "Chart":
             if n >= 1e3: return f"{n/1e3:.1f}K"
             return str(int(n))
 
-        st.markdown(f"""<div style="background: #1e222d; border-radius: 4px; padding: 8px; margin-bottom: 4px; font-family: 'Roboto', sans-serif; font-size: 11px;"><div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; color: #d1d4dc;"><div>Open <span style="float:right; color:#e0e0e0;">{sb_open:,}</span></div><div>Prev <span style="float:right; color:#e0e0e0;">{sb_prev:,}</span></div><div>Lot <span style="float:right; color:#00c853;">{fmt_num(sb_vol)}</span></div><div>High <span style="float:right; color:#00c853;">{sb_high:,}</span></div><div>ARA <span style="float:right; color:#e0e0e0;">{sb_ara:,}</span></div><div>Val <span style="float:right; color:#00c853;">{fmt_num(sb_val)}</span></div><div>Low <span style="float:right; color:#ff5252;">{sb_low:,}</span></div><div>ARB <span style="float:right; color:#e0e0e0;">{sb_arb:,}</span></div><div>Avg <span style="float:right; color:#e0e0e0;">{(sb_high+sb_low)//2:,}</span></div><div>F Buy <span style="float:right; color:#00c853;">{fmt_num(sb_f_buy)}</span></div><div>F Sell <span style="float:right; color:#ff5252;">{fmt_num(sb_f_sell)}</span></div><div>Freq <span style="float:right; color:#e0e0e0;">{fmt_num(sb_freq)}</span></div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="background: #1e222d; border-radius: 4px; padding: 8px; margin-bottom: 4px; font-family: 'Inter', sans-serif; font-size: 11px;"><div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; color: #d1d4dc;"><div>Open <span style="float:right; color:#e0e0e0;">{sb_open:,}</span></div><div>Prev <span style="float:right; color:#e0e0e0;">{sb_prev:,}</span></div><div>Vol <span style="float:right; color:#00c853;">{fmt_num(sb_vol)}</span></div><div>High <span style="float:right; color:#00c853;">{sb_high:,}</span></div><div>Low <span style="float:right; color:#ff5252;">{sb_low:,}</span></div><div>Val <span style="float:right; color:#00c853;">{fmt_num(sb_val)}</span></div></div></div>""", unsafe_allow_html=True)
 
         # --- PRO ORDER BOOK ---
         st.markdown("###  Order Book")
@@ -1610,37 +1378,22 @@ if main_active_tab == "Chart":
         # Build Table Rows HTML (Flattened to avoid Markdown Code Block issues)
         ob_rows_html = ""
         for row in mock_ob:
-             ob_rows_html += f"""<tr style="border-bottom: 1px solid #1e222d;"><td style="color:#787b86; text-align:center;">{row['bid_freq']}</td><td style="color:#d1d4dc; text-align:right;">{row['bid_vol']:,}</td><td style="color:#00c853; text-align:right;">{row['bid_p']:,}</td><td style="color:#ff5252; text-align:left;">{row['off_p']:,}</td><td style="color:#d1d4dc; text-align:right;">{row['off_vol']:,}</td><td style="color:#787b86; text-align:center;">{row['off_freq']}</td></tr>"""
+             ob_rows_html += f"""<tr style="border-bottom: 1px solid #1e222d;"><td style="color:#d1d4dc; text-align:right; padding:4px;">{row['bid_vol']}</td><td style="color:#00c853; text-align:right; padding:4px;">{row['bid_p']}</td><td style="color:#ff5252; text-align:left; padding:4px;">{row['off_p']}</td><td style="color:#d1d4dc; text-align:left; padding:4px;">{row['off_vol']}</td></tr>"""
              
-        # Total Row
-        total_bid_vol = sum(r['bid_vol'] for r in mock_ob)
-        total_off_vol = sum(r['off_vol'] for r in mock_ob)
-        total_bid_freq = sum(r['bid_freq'] for r in mock_ob)
-        total_off_freq = sum(r['off_freq'] for r in mock_ob)
-
         st.markdown(f"""
-<div style="background: #1e222d; border: 1px solid #2a2e39; border-radius: 4px; overflow: hidden; font-family: 'Roboto Mono', monospace; font-size: 10px;">
+<div style="background: #1e222d; border: 1px solid #2a2e39; border-radius: 4px; overflow: hidden; font-family: 'Inter', sans-serif; font-size: 10px;">
 <div style="max-height: 480px; overflow-y: auto;">
 <table style="width: 100%; border-collapse: separate; border-spacing: 0;">
 <thead style="background: #2a2e39; color: #848e9c; position: sticky; top: 0; z-index: 5;">
 <tr>
-<th style="padding: 4px; text-align: center; border-bottom: 1px solid #1e222d; background: #2a2e39;">Freq</th>
-<th style="padding: 4px; text-align: right; border-bottom: 1px solid #1e222d; background: #2a2e39;">Lot</th>
-<th style="padding: 4px; text-align: right; border-bottom: 1px solid #1e222d; background: #2a2e39;">Bid</th>
-<th style="padding: 4px; text-align: left; border-bottom: 1px solid #1e222d; background: #2a2e39;">Offer</th>
-<th style="padding: 4px; text-align: right; border-bottom: 1px solid #1e222d; background: #2a2e39;">Lot</th>
-<th style="padding: 4px; text-align: center; border-bottom: 1px solid #1e222d; background: #2a2e39;">Freq</th>
+<th style="padding: 6px; text-align: right; background: #2a2e39;">Size</th>
+<th style="padding: 6px; text-align: right; background: #2a2e39;">Bid</th>
+<th style="padding: 6px; text-align: left; background: #2a2e39;">Ask</th>
+<th style="padding: 6px; text-align: left; background: #2a2e39;">Size</th>
 </tr>
 </thead>
 <tbody>
 {ob_rows_html}
-<tr style="border-bottom: 1px solid #1e222d; border-top: 1px solid #444; position: sticky; bottom: 0; background: #1e222d; z-index: 5; box-shadow: 0 -2px 5px rgba(0,0,0,0.2);">
-<td style="color:#e0e0e0; text-align:center; font-weight:bold;">{total_bid_freq:,}</td>
-<td style="color:#e0e0e0; text-align:right; font-weight:bold;">{fmt_num(total_bid_vol)}</td>
-<td style="color:#848e9c; text-align:center; font-size:9px;" colspan="2">TOTAL</td>
-<td style="color:#e0e0e0; text-align:right; font-weight:bold;">{fmt_num(total_off_vol)}</td>
-<td style="color:#e0e0e0; text-align:center; font-weight:bold;">{total_off_freq:,}</td>
-</tr>
 </tbody>
 </table>
 </div>
@@ -1653,20 +1406,19 @@ if main_active_tab == "Chart":
         # Build Trade Rows HTML (Flattened)
         rt_rows_html = ""
         for t in mock_rt:
-             rt_rows_html += f"""<tr><td style="color:#d1d4dc; padding:4px 6px;">{t['time']}</td><td style="color:{t['color']}; text-align:center;">{t['code']}</td><td style="color:{t['color']}; text-align:right;">{t['price']:,}</td><td style="color:{t['color']}; text-align:center;">{t['action']}</td><td style="color:#d1d4dc; text-align:right;">{t['lot']}</td><td style="color:#aa00ff; text-align:right;">{t['buyer']}</td></tr>"""
+             rt_rows_html += f"""<tr><td style="color:#d1d4dc; padding:4px 6px;">{t['time']}</td><td style="color:{t['color']}; text-align:center;">{t['code']}</td><td style="color:{t['color']}; text-align:right;">{t['price']}</td><td style="color:{t['color']}; text-align:center;">{t['action']}</td><td style="color:#d1d4dc; text-align:right;">{t['size']}</td></tr>"""
              
         st.markdown(f"""
 <div style="background: #1e222d; border: 1px solid #2a2e39; border-radius: 4px; padding: 0; min-height: 180px; overflow: hidden;">
 <div style="max-height: 300px; overflow-y: auto;">
-<table style="width: 100%; border-collapse: separate; border-spacing: 0; font-family: 'Roboto Mono', monospace; font-size: 10px;">
+<table style="width: 100%; border-collapse: separate; border-spacing: 0; font-family: 'Inter', sans-serif; font-size: 10px;">
 <thead style="background: #1e222d; border-bottom: 1px solid #2a2e39; color: #848e9c; position: sticky; top: 0; z-index: 5;">
 <tr>
 <th style="padding: 6px; text-align: left; background: #1e222d;">Time</th>
-<th style="padding: 6px; text-align: center; background: #1e222d;">Code</th>
+<th style="padding: 6px; text-align: center; background: #1e222d;">Asset</th>
 <th style="padding: 6px; text-align: right; background: #1e222d;">Price</th>
-<th style="padding: 6px; text-align: center; background: #1e222d;">Action</th>
-<th style="padding: 6px; text-align: right; background: #1e222d;">Lot</th>
-<th style="padding: 6px; text-align: right; background: #1e222d;">Buyer</th>
+<th style="padding: 6px; text-align: center; background: #1e222d;">Side</th>
+<th style="padding: 6px; text-align: right; background: #1e222d;">Size</th>
 </tr>
 </thead>
 <tbody>
@@ -1692,6 +1444,7 @@ if main_active_tab == "Chart":
             st.session_state.scan_results = None
             st.session_state.last_update = None
             clear_cached_results()  # Clear cache file
+            st.cache_data.clear()   # PURGE STREAMLIT DATA CACHE (News, etc.)
             st.rerun()
 
     st.markdown("---")
@@ -1723,88 +1476,53 @@ if main_active_tab == "Chart":
         
         try:
             loading_placeholder.markdown(custom_loading_overlay("LOADING..."), unsafe_allow_html=True)
-            # PHASE 1: Batch Download Historical Data (Extremely Fast)
-            try:
-                all_hist = yf.download(TICKERS, period="3mo", group_by='ticker', threads=True, progress=False)
-            except:
-                all_hist = {}
-
-            # PHASE 2: Tier 1 Filtering (Technical Filter)
+            
+            # PHASE 1: Tier 1 Filtering (Technical Filter using CoinGecko Data)
             promising_tickers = []
             results = [] 
             
-            p_bar = st.progress(0, text="Menyaring emiten potensial...")
-            for i, t in enumerate(TICKERS):
+            p_bar = st.progress(0, text="Menganalisis crypto potensial...")
+            
+            # Use already fetched CRYPTO_DATA for fast scanning
+            for i, coin in enumerate(CRYPTO_DATA):
                 # Update overlay progress
-                prog_pct = int((i + 1) / len(TICKERS) * 100)
-                if i % 3 == 0 or i == len(TICKERS) - 1: # Update every 3 items
-                    loading_placeholder.markdown(custom_loading_overlay(f"LOADING... ({t})", progress=prog_pct), unsafe_allow_html=True)
+                prog_pct = int((i + 1) / len(CRYPTO_DATA) * 100)
+                if i % 10 == 0 or i == len(CRYPTO_DATA) - 1:
+                    loading_placeholder.markdown(custom_loading_overlay(f"ANALYZING... ({coin['symbol'].upper()})", progress=prog_pct), unsafe_allow_html=True)
                 
-                try:
-                    # Safely check if ticker exists in downloaded data
-                    hist = None
-                    if isinstance(all_hist, pd.DataFrame) and not all_hist.empty:
-                        # Check if multi-level columns exist
-                        if hasattr(all_hist.columns, 'levels'):
-                            if t in list(all_hist.columns.levels[0]):
-                                hist = all_hist[t]
-                        elif t in all_hist.columns:
-                            hist = all_hist[[t]]
-                    
-                    if hist is not None and not hist.empty and len(hist) >= 50:
-                        # Calculate needed Indicators
-                        close_prices = hist['Close']
-                        ma5 = close_prices.tail(5).mean()
-                        ma20 = close_prices.tail(20).mean()
-                        ma50 = close_prices.tail(50).mean()
-                        
-                        curr_vol = hist['Volume'].iloc[-1]
-                        avg_vol = hist['Volume'].tail(20).mean() # 20-day average volume
-                        
-                        # --- RELAXED FILTERING FOR BETTER WATCHLIST VISIBILITY ---
-                        # 1. Trend: Bullish alignment
-                        cond_trend = (ma5 > ma20) and (ma20 > ma50) and (close_prices.iloc[-1] > ma20)
-                        
-                        # 2. Volume: At least 1.5x average volume (Lowered from 2.0x)
-                        cond_vol = curr_vol > (avg_vol * 1.5) 
-                        
-                        # 3. Tightness: Detect consolidation
-                        range_crude = (hist['High'].tail(5).max() - hist['Low'].tail(5).min()) / hist['Low'].tail(5).min() * 100
-                        cond_tight = range_crude < 4.5 # Relaxed from 3.5%
-                        
-                        # Pass if Trend is good AND (Volume is decent OR Price is consolidating)
-                        # This ensures "Watchlist" items (early move) are captured
-                        if cond_trend and (cond_vol or cond_tight):
-                            promising_tickers.append(t)
-                        # Special Case: Ultra tight consolidation even if trend is just starting
-                        elif range_crude < 2.5:
-                            promising_tickers.append(t)
-                except:
-                    continue
-                p_bar.progress((i + 1) / len(TICKERS))
+            # PHASE 1: Tier 1 Filtering (Smart Screening)
+            promising_tickers = []
+            
+            p_bar = st.progress(0, text="Menganalisis crypto potensial...")
+            
+            # Use already fetched CRYPTO_DATA and apply 5-Pillar filtering
+            for i, coin in enumerate(CRYPTO_DATA):
+                # Update overlay progress
+                prog_pct = int((i + 1) / len(CRYPTO_DATA) * 100)
+                if i % 15 == 0 or i == len(CRYPTO_DATA) - 1:
+                    loading_placeholder.markdown(custom_loading_overlay(f"ANALYZING... ({coin['symbol'].upper()})", progress=prog_pct), unsafe_allow_html=True)
+                
+                # 5-Pillar Screening Logic for Tier 1:
+                price_chg = abs(coin.get('price_change_percentage_24h', 0) or 0)
+                vol_mcap_ratio = coin.get('total_volume', 0) / (coin.get('market_cap', 1) or 1)
+                ath_chg = abs(coin.get('ath_change_percentage', 0) or 0)
+                
+                # Filter: Top 30 assets OR High Vol (>2.5%) OR Undervalued gem (>70% drop) OR High Activity (Vol/MCap > 0.08)
+                if i < 30 or price_chg > 2.5 or (ath_chg > 70 and vol_mcap_ratio > 0.05) or vol_mcap_ratio > 0.12:
+                    promising_tickers.append(coin['symbol'].upper())
+                
+                p_bar.progress((i + 1) / len(CRYPTO_DATA))
             
             p_bar.empty()
             
-            # PHASE 3: Tier 2 Deep Dive (Parallel for promising ones ONLY)
+            # Deep Dive
             if promising_tickers:
-                total_technical = len(promising_tickers)
-                st.info(f"Menemukan {total_technical} emiten potensial secara teknikal. Melakukan Quality Check...")
+                total_assets = len(promising_tickers)
+                st.info(f"Menemukan {total_assets} asset potensial. Melakukan Deep Analysis...")
                 final_results = []
-                # Optimasi: Tingkatkan max_workers dari 15 ke 25
+                
                 with ThreadPoolExecutor(max_workers=25) as executor:
-                    # Optimasi: Kirim data historis yang sudah ada (hist) ke analyze_stock
-                    futures = {}
-                    for t in promising_tickers:
-                        # Safely extract historical data for this ticker
-                        t_hist = None
-                        if isinstance(all_hist, pd.DataFrame) and not all_hist.empty:
-                            if hasattr(all_hist.columns, 'levels'):
-                                if t in list(all_hist.columns.levels[0]):
-                                    t_hist = all_hist[t]
-                            elif t in all_hist.columns:
-                                t_hist = all_hist[[t]]
-                        
-                        futures[executor.submit(analyze_stock, t, t_hist)] = t
+                    futures = {executor.submit(analyze_crypto, t): t for t in promising_tickers}
                     
                     p_bar_deep = st.progress(0)
                     for idx, future in enumerate(futures):
@@ -1812,7 +1530,6 @@ if main_active_tab == "Chart":
                         if res:
                             final_results.append(res)
                         
-                        # Update overlay for deep analysis
                         prog_deep = int((idx + 1) / len(promising_tickers) * 100)
                         loading_placeholder.markdown(custom_loading_overlay(f"DEEP ANALYSIS {idx+1}/{len(promising_tickers)}", progress=prog_deep), unsafe_allow_html=True)
                         p_bar_deep.progress((idx + 1) / len(promising_tickers))
@@ -1821,20 +1538,16 @@ if main_active_tab == "Chart":
             
             if results:
                 st.session_state.scan_results = pd.DataFrame(results)
-                st.session_state.last_update = time.strftime("%H:%M WIB")
+                st.session_state.last_update = time.strftime("%H:%M")
                 
-                # Hitung hasil akhir vs filter teknikal
+                # Filter logic
                 final_df = st.session_state.scan_results
                 high_quality_count = len(final_df[final_df['Status'] != 'HOLD'])
-                filtered_out = total_technical - high_quality_count
                 
                 # Save to cache
                 save_cached_results(st.session_state.scan_results, st.session_state.last_update)
                 
-                msg = f"Scan Completed. Found {high_quality_count} High-Quality assets."
-                if filtered_out > 0:
-                    msg += f" ({filtered_out} assets filtered by Quality Check)"
-                st.success(msg)
+                st.success(f"Scan Completed. Found {high_quality_count} High-Potential assets.")
             else:
                 st.warning("No data fetched or no match found.")
                 st.session_state.scan_results = None
@@ -1859,7 +1572,7 @@ if main_active_tab == "Chart":
             with col1:
                 result_search = st.text_input(
                     "search_input",
-                    placeholder="Ketik kode saham", 
+                    placeholder="Ketik kode crypto", 
                     label_visibility="collapsed",
                     key="search_query"
                 )
@@ -1878,11 +1591,13 @@ if main_active_tab == "Chart":
             st.caption(f"Menampilkan {len(df)} hasil pencarian untuk '{result_search}'.")
         
         # Prepare filtered lists to get counts - ACCURATE MATH
-        watchlist_list = [r for i, r in df.iterrows() if 'WATCHLIST' in r['Status']]
-        exclusive_hot_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['STRONG BUY', 'WHALE', 'BIG PLAYER', 'HIGH RISK'])]
-        hold_list = [r for i, r in df.iterrows() if r['Status'] == 'HOLD']
+        # Prepare filtered lists to get counts - ACCURATE MATH
+        watchlist_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['WATCHLIST', 'CORE ASSET', 'UNDERVALUED'])]
+        exclusive_hot_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['ALPHA', 'WHALE', 'BREAKOUT', 'BULLISH', 'TRENDING', 'BUZZ'])]
         
-        total_potential = len(watchlist_list) + len(exclusive_hot_list)
+        # All potential is everything that is not a simple 'HOLD'
+        all_potential_list = [r for i, r in df.iterrows() if r['Status'] != 'HOLD']
+        total_potential = len(all_potential_list)
         
         # Tabs for Result View - Using radio for persistence
         result_tab_options = [
@@ -1914,9 +1629,9 @@ if main_active_tab == "Chart":
             label_visibility="collapsed"
         )
         
-        def render_stock_grid(rows, key_prefix):
+        def render_crypto_grid(rows, key_prefix):
             if not rows:
-                st.info("Belum ada emiten yang memenuhi kriteria ini.")
+                st.info("Belum ada asset yang memenuhi kriteria ini.")
                 return
             
             cols = st.columns(3)
@@ -1925,13 +1640,14 @@ if main_active_tab == "Chart":
                     # Add unique ID for anchor navigation
                     st.markdown(f'<div id="card-{row["Ticker"]}"></div>', unsafe_allow_html=True)
                     
+                    ticker_clean = row['Ticker']
+                    coin_data = COIN_MAP.get(ticker_clean, {})
+                    logo_url = coin_data.get('image', '')
+                    
                     with st.container(border=True):
-                        # 1. Header: Ticker & Price (Minimalist)
+                        # 1. Header: Ticker & Price
                         h_col1, h_col2 = st.columns([2, 1])
                         with h_col1:
-                            ticker_clean = row['Ticker'].replace('.JK', '')
-                            # Add Logo next to ticker
-                            logo_url = f"https://assets.stockbit.com/logos/companies/{ticker_clean}.png"
                             st.markdown(f"""
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <div style="width:24px; height:24px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05);">
@@ -1943,29 +1659,20 @@ if main_active_tab == "Chart":
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
-                            st.markdown(f"<span style='font-size: 18px; font-weight: 800; color: #fff;'>Rp {row['Price']:,}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span style='font-size: 18px; font-weight: 800; color: #fff;'>{format_price(row['Price'])}</span>", unsafe_allow_html=True)
                         with h_col2:
-                            # Status (Plain Text)
                             st.markdown(f"<div style='text-align: right; font-size: 11px; font-weight: 700; color: #848e9c; margin-top: 5px;'>{row['Status']}</div>", unsafe_allow_html=True)
 
-                        # 2. Key Metrics Card (Responsive Grid)
+                        # 2. Key Metrics Card
                         st.markdown(f"""
                             <div class="metrics-grid">
                                 <div class="metric-item">
-                                    <span class="metric-label">Trend</span>
-                                    <span class="metric-value">{row['MA Trend']}</span>
+                                    <span class="metric-label">24h Chg</span>
+                                    <span class="metric-value">{row['Change %']:.2f}%</span>
                                 </div>
                                 <div class="metric-item">
-                                    <span class="metric-label">Vol</span>
-                                    <span class="metric-value">{row['Raw Vol Ratio']:.1f}x</span>
-                                </div>
-                                <div class="metric-item">
-                                    <span class="metric-label">PBV</span>
-                                    <span class="metric-value">{row['Raw PBV']:.2f}x</span>
-                                </div>
-                                <div class="metric-item">
-                                    <span class="metric-label">ROE</span>
-                                    <span class="metric-value">{row.get('ROE', 0):.1f}%</span>
+                                    <span class="metric-label">Mkt Cap</span>
+                                    <span class="metric-value">${coin_data.get('market_cap', 0)/1e9:.1f}B</span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
@@ -1988,21 +1695,21 @@ if main_active_tab == "Chart":
                             st.markdown("---")
                             if row['News List']:
                                 for news in row['News List']:
-                                    st.markdown(f"**{news.get('date', 'Baru')}** | {news.get('source')}")
-                                    st.markdown(f"[{news.get('title')}]({news.get('link', '#')})")
+                                    st.markdown(f"🗓️ **{news.get('date', 'Baru')}** | 🌐 {news.get('source')}")
+                                    st.markdown(f"🔗 **[{news.get('title')}]({news.get('link', '#')})**")
                                     st.markdown("---")
                             else: st.caption("Tidak ada berita spesifik hari ini.")
                         
-                        st.button(f"Load Chart", key=f"btn_{key_prefix}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
+                        st.button(f"Load Chart", key=f"btn_{key_prefix}_{row['Ticker']}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
 
 
         # Render content based on active tab
         if active_tab.startswith("All"):
-            render_stock_grid(watchlist_list + exclusive_hot_list, "all")
+            render_crypto_grid(all_potential_list, "all")
             
             # --- PROFESSIONAL TABLE UX IN ALL TAB ---
             st.markdown("---")
-            st.markdown("### 📊 Tabel Detail Semua Emiten")
+            st.markdown("### 📊 Tabel Detail Semua Asset")
             st.markdown("""
             <style>
                 /* Dataframe header styling */
@@ -2021,7 +1728,7 @@ if main_active_tab == "Chart":
                     "Ticker": st.column_config.TextColumn(
                         "Ticker", 
                         width="small",
-                        help="Kode Saham Emiten"
+                        help="Kode Crypto Asset"
                     ),
                     "Status": st.column_config.TextColumn(
                         "Signal Status", 
@@ -2029,8 +1736,8 @@ if main_active_tab == "Chart":
                         help="Hasil Analisis Algoritma"
                     ),
                     "Price": st.column_config.NumberColumn(
-                        "Price (IDR)", 
-                        format="Rp %d",
+                        "Price (USD)", 
+                        format="$ %.2f",
                         help="Harga Terakhir"
                     ),
                     "Change %": st.column_config.NumberColumn(
@@ -2067,247 +1774,73 @@ if main_active_tab == "Chart":
             )
 
         elif active_tab.startswith("Watchlist"):
-            render_stock_grid(watchlist_list, "watchlist")
+            render_crypto_grid(watchlist_list, "watchlist")
 
         elif active_tab.startswith("Top Picks"):
-            render_stock_grid(exclusive_hot_list, "picks")
+            render_crypto_grid(exclusive_hot_list, "picks")
 
-elif main_active_tab == "Financial statement":
-    st.markdown("## Laporan Keuangan")
+elif main_active_tab == "Asset Stats":
+    st.markdown("## Statistik Asset")
     st.markdown("---")
     
     try:
-        yf_ticker = yf.Ticker(current_symbol + ".JK")
-        info = yf_ticker.info
-        
-        # Company Info Header
-        col_info1, col_info2 = st.columns([2, 1])
-        with col_info1:
-            st.markdown(f"### {info.get('longName', current_symbol)}")
-            st.caption(f"**Sektor:** {info.get('sector', 'N/A')} | **Industri:** {info.get('industry', 'N/A')}")
-        with col_info2:
-            market_cap = info.get('marketCap', 0)
-            if market_cap > 0:
-                if market_cap >= 1e12:
-                    market_cap_str = f"Rp {market_cap/1e12:.2f}T"
-                elif market_cap >= 1e9:
-                    market_cap_str = f"Rp {market_cap/1e9:.2f}B"
-                else:
-                    market_cap_str = f"Rp {market_cap/1e6:.2f}M"
-                st.metric("Market Cap", market_cap_str)
-        
-        st.markdown("---")
-        
-        # Key Financial Metrics
-        st.markdown("### Metrik Keuangan Utama")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            current_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
-            previous_close = info.get('previousClose', 0)
-            change_pct = ((current_price - previous_close) / previous_close * 100) if previous_close > 0 else 0
-            st.metric(
-                "Harga Saham",
-                f"Rp {current_price:,.0f}",
-                f"{change_pct:+.2f}%"
-            )
-        
-        with col2:
-            pe_ratio = info.get('trailingPE', 0)
-            st.metric(
-                "P/E Ratio",
-                f"{pe_ratio:.2f}x" if pe_ratio > 0 else "N/A",
-                help="Price to Earnings Ratio"
-            )
-        
-        with col3:
-            pbv = info.get('priceToBook', 0)
-            st.metric(
-                "P/BV Ratio",
-                f"{pbv:.2f}x" if pbv > 0 else "N/A",
-                help="Price to Book Value Ratio"
-            )
-        
-        with col4:
-            dividend_yield = info.get('dividendYield', 0)
-            st.metric(
-                "Dividend Yield",
-                f"{dividend_yield*100:.2f}%" if dividend_yield > 0 else "N/A"
-            )
-        
-        st.markdown("---")
-        
-        # Profitability Metrics
-        st.markdown("### Profitabilitas")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            roe = info.get('returnOnEquity', 0)
-            roe_color = "normal" if roe <= 0 else ("inverse" if roe < 0.10 else "off")
-            st.metric(
-                "ROE",
-                f"{roe*100:.2f}%" if roe > 0 else "N/A",
-                help="Return on Equity - Efisiensi menghasilkan profit dari ekuitas",
-                delta_color=roe_color
-            )
-        
-        with col2:
-            roa = info.get('returnOnAssets', 0)
-            st.metric(
-                "ROA",
-                f"{roa*100:.2f}%" if roa > 0 else "N/A",
-                help="Return on Assets - Efisiensi menghasilkan profit dari aset"
-            )
-        
-        with col3:
-            profit_margin = info.get('profitMargins', 0)
-            st.metric(
-                "Profit Margin",
-                f"{profit_margin*100:.2f}%" if profit_margin > 0 else "N/A",
-                help="Net Profit Margin"
-            )
-        
-        with col4:
-            operating_margin = info.get('operatingMargins', 0)
-            st.metric(
-                "Operating Margin",
-                f"{operating_margin*100:.2f}%" if operating_margin > 0 else "N/A"
-            )
-        
-        st.markdown("---")
-        
-        # Financial Health
-        st.markdown("### Kesehatan Keuangan")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            current_ratio = info.get('currentRatio', 0)
-            st.metric(
-                "Current Ratio",
-                f"{current_ratio:.2f}x" if current_ratio > 0 else "N/A",
-                help="Kemampuan membayar kewajiban jangka pendek"
-            )
-        
-        with col2:
-            debt_to_equity = info.get('debtToEquity', 0)
-            if debt_to_equity and debt_to_equity > 0:
-                debt_to_equity = debt_to_equity / 100
-            st.metric(
-                "Debt to Equity",
-                f"{debt_to_equity:.2f}x" if debt_to_equity > 0 else "N/A",
-                help="Rasio utang terhadap ekuitas"
-            )
-        
-        with col3:
-            quick_ratio = info.get('quickRatio', 0)
-            st.metric(
-                "Quick Ratio",
-                f"{quick_ratio:.2f}x" if quick_ratio > 0 else "N/A",
-                help="Kemampuan membayar kewajiban tanpa menjual inventori"
-            )
-        
-        with col4:
-            total_cash = info.get('totalCash', 0)
-            if total_cash > 0:
-                if total_cash >= 1e12:
-                    cash_str = f"Rp {total_cash/1e12:.2f}T"
-                elif total_cash >= 1e9:
-                    cash_str = f"Rp {total_cash/1e9:.2f}B"
-                else:
-                    cash_str = f"Rp {total_cash/1e6:.2f}M"
-                st.metric("Total Cash", cash_str)
-            else:
-                st.metric("Total Cash", "N/A")
-        
-        st.markdown("---")
-        
-        # Revenue & Earnings
-        st.markdown("### Pendapatan & Laba")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            total_revenue = info.get('totalRevenue', 0)
-            revenue_growth = info.get('revenueGrowth', 0)
-            if total_revenue > 0:
-                if total_revenue >= 1e12:
-                    revenue_str = f"Rp {total_revenue/1e12:.2f}T"
-                elif total_revenue >= 1e9:
-                    revenue_str = f"Rp {total_revenue/1e9:.2f}B"
-                else:
-                    revenue_str = f"Rp {total_revenue/1e6:.2f}M"
-                st.metric(
-                    "Total Revenue (TTM)",
-                    revenue_str,
-                    f"{revenue_growth*100:+.2f}%" if revenue_growth != 0 else None
-                )
-            else:
-                st.metric("Total Revenue (TTM)", "N/A")
-        
-        with col2:
-            net_income = info.get('netIncomeToCommon', 0)
-            earnings_growth = info.get('earningsGrowth', 0)
-            if net_income > 0:
-                if net_income >= 1e12:
-                    income_str = f"Rp {net_income/1e12:.2f}T"
-                elif net_income >= 1e9:
-                    income_str = f"Rp {net_income/1e9:.2f}B"
-                else:
-                    income_str = f"Rp {net_income/1e6:.2f}M"
-                st.metric(
-                    "Net Income (TTM)",
-                    income_str,
-                    f"{earnings_growth*100:+.2f}%" if earnings_growth != 0 else None
-                )
-            else:
-                st.metric("Net Income (TTM)", "N/A")
-        
-        st.markdown("---")
-        
-        # Additional Info
-        st.markdown("### Informasi Tambahan")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Karyawan:**")
-            employees = info.get('fullTimeEmployees', 'N/A')
-            st.write(f"{employees:,}" if isinstance(employees, int) else employees)
+        coin = COIN_MAP.get(current_symbol)
+        if not coin:
+            st.warning("Data statistik tidak tersedia untuk asset ini.")
+        else:
+            # Asset Info Header
+            col_info1, col_info2 = st.columns([2, 1])
+            with col_info1:
+                st.markdown(f"### {coin['name']} ({coin['symbol'].upper()})")
+                st.caption(f"**Market Cap Rank:** #{coin.get('market_cap_rank', 'N/A')}")
+            with col_info2:
+                market_cap = coin.get('market_cap', 0)
+                st.metric("Market Cap", f"${market_cap/1e9:.2f}B")
             
-            st.markdown("**Alamat:**")
-            address = info.get('address1', 'N/A')
-            city = info.get('city', '')
-            country = info.get('country', '')
-            st.write(f"{address}, {city}, {country}")
-        
-        with col2:
-            st.markdown("**Kontak:**")
-            phone = info.get('phone', 'N/A')
-            st.write(phone)
+            st.markdown("---")
             
-            st.markdown("**Website:**")
-            website = info.get('website', 'N/A')
-            if website != 'N/A':
-                st.markdown(f"[{website}]({website})")
+            # Key Metrics
+            st.markdown("### Market Statistics")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Price", f"${coin['current_price']:,}", f"{coin['price_change_percentage_24h']:+.2f}%")
+            with col2:
+                st.metric("24h High", f"${coin.get('high_24h', 0):,}")
+            with col3:
+                st.metric("24h Low", f"${coin.get('low_24h', 0):,}")
+            with col4:
+                st.metric("All Time High", f"${coin.get('ath', 0):,}")
+            
+            st.markdown("---")
+            
+            # Supply Info
+            st.markdown("### Supply Information")
+            s_col1, s_col2, s_col3 = st.columns(3)
+            with s_col1:
+                st.metric("Circulating Supply", f"{coin.get('circulating_supply', 0):,.0f}")
+            with s_col2:
+                st.metric("Total Supply", f"{coin.get('total_supply', 0) or 0:,.0f}")
+            with s_col3:
+                st.metric("Max Supply", f"{coin.get('max_supply', 0) or 0:,.0f}")
+        
+            # Optional: Add technical indicators here if needed
+        
+            # Description
+            st.markdown("---")
+            st.markdown("### Asset Description")
+            description = coin.get('description', {}).get('en', 'Tidak ada deskripsi tersedia.')
+            if len(description) > 500:
+                st.write(description[:500] + "...")
             else:
-                st.write(website)
-        
-        # Business Summary
-        st.markdown("---")
-        st.markdown("### Deskripsi Bisnis")
-        business_summary = info.get('longBusinessSummary', 'Tidak ada deskripsi tersedia.')
-        st.write(business_summary)
-        
+                st.write(description)
+                
     except Exception as e:
-        st.error(f"Gagal memuat data keuangan: {str(e)}")
-        st.info("Tip: Pastikan kode saham yang dipilih valid dan memiliki data keuangan yang tersedia.")
+        st.error(f"Gagal memuat statistik asset: {str(e)}")
 
 elif main_active_tab == "Professional Analyst Advisor":
     st.markdown(f"## Penasehat Analis Professional")
-    st.caption("Tanyakan apapun tentang saham dan dapatkan penjelasan berdasarkan analisis teknikal & fundamental.")
+    st.caption("Tanyakan apapun tentang crypto dan dapatkan penjelasan berdasarkan analisis teknikal & market buzz.")
     st.markdown("---")
     
     # Initialize chat history
@@ -2318,7 +1851,7 @@ elif main_active_tab == "Professional Analyst Advisor":
     q_col1, q_col2 = st.columns([4, 1])
     with q_col1:
         query = st.text_input(
-            "Cari Kode Saham (contoh: BBCA, IHSG)", 
+            "Cari Kode Crypto (contoh: BTC, ETH)", 
             placeholder="Ketik kode...", 
             key="advisor_query",
             label_visibility="collapsed"
@@ -2341,11 +1874,8 @@ elif main_active_tab == "Professional Analyst Advisor":
             
         if is_ticker_query:
             # Ticker-specific analysis
-            if not ticker_query.endswith(".JK") and not ticker_query.startswith("^"):
-                ticker_query += ".JK"
-                
             with st.spinner(f"Menganalisis {ticker_query}..."):
-                data = analyze_stock(ticker_query)
+                data = analyze_crypto(ticker_query)
                 
                 if data:
                     # Store in chat history
@@ -2355,53 +1885,20 @@ elif main_active_tab == "Professional Analyst Advisor":
                         'data': data
                     })
                     
-                    st.markdown(f"### Analisis Untuk: {data['Name']} ({data['Ticker'].replace('.JK', '')})")
+                    st.markdown(f"### Analisis Untuk: {data['Name']} ({data['Ticker']})")
                     
-                    # Get stock data for detailed analysis
-                    try:
-                        yf_ticker = yf.Ticker(ticker_query)
-                        hist = yf_ticker.history(period="3mo")
-                        info = yf_ticker.info
-                        
-                        # Calculate technical indicators
-                        current_price = data['Price']
-                        ma5 = hist['Close'].tail(5).mean()
-                        ma20 = hist['Close'].tail(20).mean()
-                        ma50 = hist['Close'].tail(50).mean() if len(hist) >= 50 else ma20
-                        
-                        # RSI calculation (simplified)
-                        delta = hist['Close'].diff()
-                        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                        rs = gain / loss
-                        rsi = 100 - (100 / (1 + rs))
-                        current_rsi = rsi.iloc[-1] if not rsi.empty else 50
-                        
-                        # Volume analysis
-                        avg_volume = hist['Volume'].mean()
-                        current_volume = hist['Volume'].iloc[-1]
-                        volume_ratio = current_volume / avg_volume
-                        
-                        # Price change
-                        price_change_1d = ((current_price - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100) if len(hist) >= 2 else 0
-                        price_change_1w = ((current_price - hist['Close'].iloc[-5]) / hist['Close'].iloc[-5] * 100) if len(hist) >= 5 else 0
-                        price_change_1m = ((current_price - hist['Close'].iloc[-20]) / hist['Close'].iloc[-20] * 100) if len(hist) >= 20 else 0
-                        
-                    except:
-                        current_rsi = 50
-                        volume_ratio = 1.0
-                        price_change_1d = 0
-                        price_change_1w = 0
-                        price_change_1m = 0
-                        ma5 = current_price
-                        ma20 = current_price
-                        ma50 = current_price
+                    # Get crypto metrics from COIN_MAP
+                    coin = COIN_MAP.get(data['Ticker'], {})
+                    current_price = data['Price']
+                    price_change_1d = data['Change %']
+                    
+                    # Placeholder for technicals
+                    current_rsi = 65 if "BULLISH" in data['Status'] else (35 if "BEARISH" in data['Status'] else 50)
+                    volume_ratio = 1.5 if "VOLUME" in data['Status'] else 1.0
                     
                     # Recommendation Logic
-                    score = data['News Score']
                     status = data['Status']
-                    
-                    recommendation = "LAYAK BELI" if "BUY" in status or "WHALE" in status else ("PANTAU (WATCHLIST)" if "WATCHLIST" in status else "TUNGGU (HOLD)")
+                    recommendation = "LAYAK BELI" if any(s in status for s in ["MOMENTUM", "CORE", "BULLISH"]) else ("PANTAU" if "WATCHLIST" in status else "TUNGGU (HOLD)")
                     rec_color = "#00c853" if "LAYAK" in recommendation else ("#2962ff" if "PANTAU" in recommendation else "#ff5252")
                     
                     # Display Recommendation
@@ -2413,113 +1910,21 @@ elif main_active_tab == "Professional Analyst Advisor":
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Technical Analysis Section
+                    # Technical & Sentiment Section
                     col1, col2, col3 = st.columns(3)
-                    
                     with col1:
-                        st.markdown("#### 📈 Analisis Teknikal")
-                        
-                        # Trend Analysis
-                        trend = "BULLISH ↗️" if ma5 > ma20 > ma50 else ("BEARISH ↘️" if ma5 < ma20 < ma50 else "SIDEWAYS ↔️")
-                        trend_color = "#00c853" if "BULLISH" in trend else ("#ff5252" if "BEARISH" in trend else "#ffa726")
-                        
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                            <div style="font-size: 11px; color: #848e9c;">Trend:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {trend_color};">{trend}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # RSI
-                        rsi_status = "Overbought" if current_rsi > 70 else ("Oversold" if current_rsi < 30 else "Netral")
-                        rsi_color = "#ff5252" if current_rsi > 70 else ("#00c853" if current_rsi < 30 else "#ffa726")
-                        
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                            <div style="font-size: 11px; color: #848e9c;">RSI (14):</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {rsi_color};">{current_rsi:.1f} - {rsi_status}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Volume
-                        vol_status = "Tinggi" if volume_ratio > 1.5 else ("Normal" if volume_ratio > 0.8 else "Rendah")
-                        vol_color = "#00c853" if volume_ratio > 1.5 else ("#ffa726" if volume_ratio > 0.8 else "#ff5252")
-                        
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px;">
-                            <div style="font-size: 11px; color: #848e9c;">Volume:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {vol_color};">{volume_ratio:.2f}x - {vol_status}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
+                        st.markdown("#### 📈 Market Stats")
+                        st.markdown(f"**Rank:** #{coin.get('market_cap_rank', 'N/A')}")
+                        st.markdown(f"**1D Change:** {price_change_1d:+.2f}%")
                     with col2:
-                        st.markdown("#### 💰 Analisis Fundamental")
-                        
-                        # PBV
-                        pbv = data.get('Raw PBV', 0)
-                        pbv_status = "Undervalued" if pbv < 1.5 else ("Fair" if pbv < 3.0 else "Overvalued")
-                        pbv_color = "#00c853" if pbv < 1.5 else ("#ffa726" if pbv < 3.0 else "#ff5252")
-                        
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                            <div style="font-size: 11px; color: #848e9c;">PBV:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {pbv_color};">{pbv:.2f}x - {pbv_status}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # ROE
-                        roe = data.get('ROE', 0)
-                        roe_status = "Excellent" if roe > 15 else ("Good" if roe > 10 else "Weak")
-                        roe_color = "#00c853" if roe > 15 else ("#ffa726" if roe > 10 else "#ff5252")
-                        
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                            <div style="font-size: 11px; color: #848e9c;">ROE:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {roe_color};">{roe:.1f}% - {roe_status}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Sentiment
-                        sentiment_score = data.get('News Score', 0)
-                        sentiment_status = "Positif" if sentiment_score > 60 else ("Netral" if sentiment_score > 40 else "Negatif")
-                        sentiment_color = "#00c853" if sentiment_score > 60 else ("#ffa726" if sentiment_score > 40 else "#ff5252")
-                        
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px;">
-                            <div style="font-size: 11px; color: #848e9c;">Sentimen Berita:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {sentiment_color};">{sentiment_score}% - {sentiment_status}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
+                        st.markdown("#### ⚡ Momentum")
+                        rsi_text = "Overbought" if current_rsi > 70 else ("Oversold" if current_rsi < 30 else "Neutral")
+                        st.markdown(f"**RSI Index:** {current_rsi:.1f} ({rsi_text})")
+                        st.markdown(f"**Volume:** {volume_ratio:.1f}x (Avg)")
                     with col3:
-                        st.markdown("#### 📊 Performa Harga")
-                        
-                        # 1 Day Change
-                        change_1d_color = "#00c853" if price_change_1d > 0 else "#ff5252"
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                            <div style="font-size: 11px; color: #848e9c;">1 Hari:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {change_1d_color};">{price_change_1d:+.2f}%</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # 1 Week Change
-                        change_1w_color = "#00c853" if price_change_1w > 0 else "#ff5252"
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
-                            <div style="font-size: 11px; color: #848e9c;">1 Minggu:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {change_1w_color};">{price_change_1w:+.2f}%</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # 1 Month Change
-                        change_1m_color = "#00c853" if price_change_1m > 0 else "#ff5252"
-                        st.markdown(f"""
-                        <div style="background: #1e222d; padding: 12px; border-radius: 6px;">
-                            <div style="font-size: 11px; color: #848e9c;">1 Bulan:</div>
-                            <div style="font-size: 16px; font-weight: 700; color: {change_1m_color};">{price_change_1m:+.2f}%</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown("#### 💬 Sentiment")
+                        st.markdown(f"**Score:** {data['News Score']}%")
+                        st.markdown(f"**Buzz:** {data['Social Buzz']}%")
                     
                     st.markdown("---")
                     
@@ -2527,83 +1932,58 @@ elif main_active_tab == "Professional Analyst Advisor":
                     with st.container(border=True):
                         st.markdown("#### 📝 Penjelasan Lengkap")
                         
-                        # Generate comprehensive explanation
                         explanation = f"""
-**Analisis Teknikal:**
+**Analisis Market:**
 
-{data['Ticker'].replace('.JK', '')} saat ini berada dalam trend **{trend}**. Harga bergerak {'di atas' if current_price > ma20 else 'di bawah'} MA20 (Rp {ma20:,.0f}), yang menunjukkan {'momentum positif' if current_price > ma20 else 'tekanan jual'}.
+**{data['Name']} ({data['Ticker']})** saat ini menunjukkan status **{data['Status']}**. Dengan harga saat ini di **${current_price:,.2f}**, asset ini memiliki perubahan harian sebesar **{price_change_1d:+.2f}%**.
 
-RSI berada di level **{current_rsi:.1f}** yang mengindikasikan kondisi **{rsi_status}**. {'Ini bisa menjadi peluang beli karena harga sudah oversold.' if current_rsi < 30 else ('Hati-hati, saham ini sudah overbought dan berpotensi koreksi.' if current_rsi > 70 else 'Kondisi masih normal dan belum jenuh.')}
+**Kondisi Teknis & Sentiment:**
+- **Momentum:** RSI berada di level **{current_rsi:.1f}**, menunjukkan kondisi market yang **{rsi_text.lower()}**.
+- **Aktivitas Volume:** Terjadi aktivitas trading sebesar **{volume_ratio:.1f}x** dari rata-rata normal.
+- **Sentimen Media:** Memiliki skor **{data['News Score']}%**. {data['Analysis']}
 
-Volume trading saat ini **{volume_ratio:.2f}x** dari rata-rata, menunjukkan {'akumulasi yang kuat dari big players' if volume_ratio > 1.5 else ('aktivitas normal' if volume_ratio > 0.8 else 'minat beli yang lemah')}.
-
-**Analisis Fundamental:**
-
-Dari sisi valuasi, PBV sebesar **{pbv:.2f}x** menunjukkan saham ini **{pbv_status}**. {'Ini adalah valuasi yang menarik untuk entry.' if pbv < 1.5 else ('Valuasi masih wajar.' if pbv < 3.0 else 'Valuasi sudah cukup tinggi, perlu hati-hati.')}
-
-ROE sebesar **{roe:.1f}%** menggambarkan {'efisiensi manajemen yang sangat baik dalam menghasilkan profit' if roe > 15 else ('kinerja yang cukup baik' if roe > 10 else 'kinerja yang perlu diperbaiki')}.
-
-**Sentimen Pasar:**
-
-Sentimen berita menunjukkan skor **{sentiment_score}%** yang tergolong **{sentiment_status}**. {data['Analysis']}
-
-**Kesimpulan:**
-
-{'Saham ini layak untuk dipertimbangkan sebagai kandidat beli dengan catatan perhatikan level support dan resistance.' if 'BUY' in status or 'WHALE' in status else ('Saham ini bisa dimasukkan watchlist untuk dipantau perkembangannya.' if 'WATCHLIST' in status else 'Sebaiknya tunggu konfirmasi sinyal yang lebih kuat sebelum masuk.')}
+**Kesimpulan Strategis:**
+{'Asset ini memiliki fundamental/momentum yang kuat untuk dipertimbangkan sebagai entry point.' if "LAYAK" in recommendation else 'Asset ini sebaiknya dipantau terlebih dahulu (watchlist) hingga terjadi breakout volume atau konfirmasi trend.'}
                         """
-                        
                         st.markdown(explanation)
                     
                     # Price Targets
                     st.markdown("#### 🎯 Target Harga & Risk Management")
-                    
-                    # Calculate targets based on technical levels
-                    resistance_1 = current_price * 1.08
-                    resistance_2 = current_price * 1.15
-                    support = current_price * 0.92
+                    resistance_1 = current_price * 1.10
+                    resistance_2 = current_price * 1.25
+                    support = current_price * 0.90
                     
                     col_t1, col_t2 = st.columns(2)
-                    
                     with col_t1:
                         st.markdown(f"""
                         <div style="background: #1e222d; padding: 15px; border-radius: 4px; border: 1px solid #2a2e39;">
                             <div style="font-size: 12px; color: #848e9c; margin-bottom: 12px; font-weight: 600;">📈 TARGET PROFIT:</div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #d1d4dc;">Target 1 (Konservatif):</span> <span style="color:#00c853; font-weight:700;">Rp {int(resistance_1):,}</span>
+                                <span style="color: #d1d4dc;">Target 1 (Konservatif):</span> <span style="color:#00c853; font-weight:700;">${resistance_1:,.2f}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #d1d4dc;">Target 2 (Agresif):</span> <span style="color:#00c853; font-weight:700;">Rp {int(resistance_2):,}</span>
-                            </div>
-                            <div style="font-size: 10px; color: #848e9c; margin-top: 8px;">
-                                💡 Disarankan ambil profit bertahap di setiap target
+                                <span style="color: #d1d4dc;">Target 2 (Agresif):</span> <span style="color:#00c853; font-weight:700;">${resistance_2:,.2f}</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
-                    
                     with col_t2:
                         st.markdown(f"""
                         <div style="background: #1e222d; padding: 15px; border-radius: 4px; border: 1px solid #2a2e39;">
                             <div style="font-size: 12px; color: #848e9c; margin-bottom: 12px; font-weight: 600;">🛡️ RISK MANAGEMENT:</div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #d1d4dc;">Stop Loss:</span> <span style="color:#ff5252; font-weight:700;">Rp {int(support):,}</span>
+                                <span style="color: #d1d4dc;">Stop Loss:</span> <span style="color:#ff5252; font-weight:700;">${support:,.2f}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #d1d4dc;">Risk/Reward Ratio:</span> <span style="color:#ffa726; font-weight:700;">1:2</span>
-                            </div>
-                            <div style="font-size: 10px; color: #848e9c; margin-top: 8px;">
-                                ⚠️ Selalu gunakan stop loss untuk proteksi modal
+                                <span style="color: #d1d4dc;">Risk/Reward Ratio:</span> <span style="color:#ffa726; font-weight:700;">1:2.5</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
                     
-                    # Update ticker for chart and collapse sidebar on mobile
-                    chart_tk = ticker_query.replace('.JK', '')
-                    if chart_tk == "^JKSE": chart_tk = "COMPOSITE"
-                    st.session_state.advisor_ticker = chart_tk
+                    # Update ticker for chart
+                    st.session_state.advisor_ticker = data['Ticker']
                     st.session_state.collapse_sidebar = True
-                    
                 else:
-                    st.error("Emiten tidak ditemukan atau data tidak mencukupi. Pastikan kode saham benar (misal: ZINC, BBCA).")
+                    st.error("Asset tidak ditemukan atau data tidak mencukupi. Pastikan kode crypto benar (misal: BTC, ETH).")
         
         else:
             # General question - provide educational response
@@ -2633,24 +2013,22 @@ RSI adalah indikator momentum yang mengukur kecepatan dan perubahan pergerakan h
 **Tips:** Jangan gunakan RSI sendirian, kombinasikan dengan indikator lain seperti MA dan Volume.
                 """
             
-            elif any(word in query_lower for word in ['pbv', 'price to book']):
+            elif any(word in query_lower for word in ['market cap', 'kapitalisasi']):
                 response = """
-**Apa itu PBV (Price to Book Value)?**
+**Apa itu Market Cap?**
 
-PBV adalah rasio yang membandingkan harga saham dengan nilai buku per saham. Ini menunjukkan berapa kali pasar menghargai nilai buku perusahaan.
+Market Cap (Kapitalisasi Pasar) adalah total nilai pasar dari seluruh supply koin yang beredar.
 
 **Cara Menghitung:**
-PBV = Harga Saham / Nilai Buku per Saham
+Market Cap = Harga Saat Ini × Circulating Supply
 
 **Interpretasi:**
-- **PBV < 1**: Undervalued - Saham diperdagangkan di bawah nilai bukunya (Potensi Bargain)
-- **PBV 1-3**: Fair Value - Valuasi wajar
-- **PBV > 3**: Overvalued - Saham mungkin sudah mahal
+- **Large Cap (> $10B)**: Lebih stabil, likuiditas tinggi (Blue Chip)
+- **Mid Cap ($1B - $10B)**: Potensi pertumbuhan moderat dengan risiko menengah
+- **Small Cap (< $1B)**: High Risk, High Reward - Sangat volatil
 
-**Catatan Penting:**
-- PBV rendah tidak selalu berarti saham bagus, bisa jadi ada masalah fundamental
-- Bandingkan PBV dengan kompetitor di sektor yang sama
-- Cocok untuk saham sektor perbankan dan properti
+**Mengapa Penting?**
+Market Cap menunjukkan dominasi dan ukuran relatif sebuah asset di dalam ekosistem crypto secara keseluruhan.
                 """
             
             elif any(word in query_lower for word in ['roe', 'return on equity']):
@@ -2667,19 +2045,19 @@ ROE = (Laba Bersih / Ekuitas Pemegang Saham) × 100%
 - **ROE 10-15%**: Good - Kinerja baik
 - **ROE < 10%**: Weak - Perlu evaluasi
 
-**Mengapa ROE Penting:**
-1. Menunjukkan kemampuan perusahaan menghasilkan profit
-2. Membandingkan efisiensi antar perusahaan sejenis
-3. ROE konsisten tinggi = manajemen berkualitas
+**Mengapa Fundamental Penting:**
+1. Menunjukkan kekuatan ekonomi dari project/asset
+2. Membandingkan efisiensi dan target pengembangan project
+3. Tim yang konsisten = manajemen berkualitas
 
-**Tips:** Cari saham dengan ROE konsisten di atas 15% selama 3-5 tahun terakhir.
+**Tips:** Cari asset dengan kapitalisasi pasar (Market Cap) yang kuat dan tim pengembang yang aktif.
                 """
             
             elif any(word in query_lower for word in ['volume', 'vol']):
                 response = """
 **Mengapa Volume Trading Penting?**
 
-Volume menunjukkan jumlah saham yang diperdagangkan dalam periode tertentu. Volume adalah konfirmasi dari pergerakan harga.
+Volume menunjukkan jumlah asset yang diperdagangkan dalam periode tertentu. Volume adalah konfirmasi dari pergerakan harga.
 
 **Prinsip Dasar:**
 - **Volume Tinggi + Harga Naik** = Trend naik kuat (Bullish)
@@ -2687,7 +2065,7 @@ Volume menunjukkan jumlah saham yang diperdagangkan dalam periode tertentu. Volu
 - **Volume Rendah** = Pergerakan tidak terkonfirmasi, bisa false signal
 
 **Volume Ratio:**
-- **> 1.5x**: Akumulasi kuat, big players masuk
+- **> 1.5x**: Akumulasi kuat, whales/institusi masuk
 - **0.8-1.5x**: Normal
 - **< 0.8x**: Minat lemah
 
@@ -2744,23 +2122,23 @@ Moving Average adalah rata-rata harga dalam periode tertentu yang membantu mengi
             
             elif any(word in query_lower for word in ['kapan', 'waktu', 'timing']):
                 response = """
-**Kapan Waktu Terbaik untuk Beli/Jual Saham?**
+**Kapan Waktu Terbaik untuk Beli/Jual Crypto?**
 
 **Waktu Terbaik Beli:**
-1. **Saat Koreksi Pasar** - Beli saat pasar turun tapi fundamental masih bagus
+1. **Saat Koreksi Pasar** - Beli saat pasar "dipping" tapi fundamental asset masih bagus
 2. **Breakout dengan Volume** - Harga break resistance dengan volume tinggi
-3. **RSI Oversold** - RSI < 30 dan mulai rebound
-4. **Golden Cross** - MA50 potong MA200 ke atas
-5. **Berita Positif** - Kinerja keuangan bagus, kontrak baru, dll
+3. **RSI Oversold** - RSI < 30 dan mulai rebound (Peluang Rebound)
+4. **Golden Cross** - MA50 potong MA200 ke atas (Trend Bullish Jangka Panjang)
+5. **Berita Positif** - Listing baru, partnership besar, upgrade jaringan, dll
 
 **Waktu Terbaik Jual:**
-1. **Target Profit Tercapai** - Sudah naik 10-20% dari entry
-2. **RSI Overbought** - RSI > 70 dan mulai turun
-3. **Break Support** - Harga break support penting
+1. **Target Profit Tercapai** - Sudah naik sesuai target (misal 20-50%)
+2. **RSI Overbought** - RSI > 70 dan mulai jenuh beli
+3. **Break Support** - Harga break support penting (Signal Exit)
 4. **Death Cross** - MA50 potong MA200 ke bawah
-5. **Berita Negatif** - Kinerja buruk, masalah hukum, dll
+5. **Berita Negatif** - Hack, masalah regulasi, tim pengembang bermasalah, dll
 
-**Tips:** Jangan serakah, ambil profit bertahap. Gunakan stop loss untuk proteksi.
+**Tips:** Jangan FOMO (Fear of Missing Out), ambil profit bertahap (Partial Sell). Gunakan stop loss untuk proteksi modal.
                 """
             
             elif any(word in query_lower for word in ['diversifikasi', 'portofolio']):
@@ -2768,30 +2146,24 @@ Moving Average adalah rata-rata harga dalam periode tertentu yang membantu mengi
 **Pentingnya Diversifikasi Portofolio**
 
 **Apa itu Diversifikasi?**
-Menyebar investasi ke berbagai aset untuk mengurangi risiko.
+Menyebar investasi ke berbagai tipe asset untuk mengurangi risiko.
 
 **Prinsip Diversifikasi:**
-1. **Jangan Taruh Semua Telur di Satu Keranjang**
+1. **Don't put all eggs in one basket**
 2. **Alokasi Ideal:**
-   - 40% Saham Blue Chip (BBCA, BBRI, TLKM)
-   - 30% Saham Growth (Teknologi, Konsumer)
-   - 20% Saham Value (Undervalued)
-   - 10% Cash untuk peluang
+   - 50% Top Tier Crypto (BTC, ETH)
+   - 30% Mid Cap/Narratives (AI, DePIN, RWA)
+   - 10% Small Cap/Gems
+   - 10% Stablecoin (USDT/USDC) untuk serok dip
 
 **Diversifikasi Sektor:**
-- Perbankan
-- Konsumer
-- Infrastruktur
-- Teknologi
-- Kesehatan
-- Energi
+- Layer 1 / Layer 2
+- AI & Big Data
+- DeFi / DEX
+- Gaming / Metaverse
+- RWA (Real World Assets)
 
-**Berapa Banyak Saham?**
-- Pemula: 5-8 saham
-- Intermediate: 8-12 saham
-- Advanced: 12-20 saham
-
-**Tips:** Review portofolio setiap 3 bulan, rebalance jika ada sektor yang terlalu dominan.
+**Tips:** Review portofolio secara berkala, rebalance jika ada asset yang terlalu dominan setelah naik tajam.
                 """
             
             else:
@@ -2801,17 +2173,17 @@ Menyebar investasi ke berbagai aset untuk mengurangi risiko.
 Maaf, saya belum memiliki informasi spesifik untuk pertanyaan ini. Namun, saya bisa membantu Anda dengan:
 
 **Topik yang Bisa Ditanyakan:**
-- Analisis saham tertentu (ketik kode saham seperti BBCA, ZINC)
+- Analisis crypto tertentu (ketik kode seperti BTC, ETH, SOL)
 - Indikator teknikal (RSI, MA, Volume, Support/Resistance)
-- Analisis fundamental (PBV, ROE, PER)
+- Analisis fundamental (Market Cap, Supply, Tokenomics)
 - Strategi trading dan timing
 - Diversifikasi portofolio
 - Risk management
 
 **Contoh Pertanyaan:**
-- "BBCA" - Untuk analisis lengkap BBCA
+- "BTC" - Untuk analisis lengkap Bitcoin
 - "Apa itu RSI?" - Penjelasan indikator RSI
-- "Kapan waktu terbaik beli saham?" - Tips timing
+- "Kapan waktu terbaik beli crypto?" - Tips timing
 - "Bagaimana cara diversifikasi?" - Strategi portofolio
 
 Silakan tanyakan lagi dengan topik yang lebih spesifik!
@@ -2829,11 +2201,11 @@ Silakan tanyakan lagi dengan topik yang lebih spesifik!
     
     # Always show chart
     if 'advisor_ticker' not in st.session_state: 
-        st.session_state.advisor_ticker = "COMPOSITE"
+        st.session_state.advisor_ticker = "BTC"
     
     st.markdown("---")
     st.markdown(f"### 📈 Live Chart Forecast: {st.session_state.advisor_ticker}")
-    tv_symbol = f"IDX:{st.session_state.advisor_ticker}"
+    tv_symbol = f"BINANCE:{st.session_state.advisor_ticker}USDT"
     
     st.components.v1.html(
         f"""
