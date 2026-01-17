@@ -12,6 +12,8 @@ import pickle
 import os
 import numpy as np
 import decimal
+import email.utils
+from datetime import datetime, timezone, timedelta
 
 def format_price(price):
     """Custom formatter to handle micro-prices without scientific notation"""
@@ -31,6 +33,39 @@ def format_price(price):
         return f"${price:,.4f}"
     else:
         return f"${price:,.2f}"
+
+def get_relative_time(date_str):
+    try:
+        if not date_str or date_str == "Today":
+            return "Hari ini"
+        
+        # Parse RFC 822 date (standard for RSS)
+        try:
+            dt = email.utils.parsedate_to_datetime(date_str)
+        except:
+            # Fallback for generic formats like "2026-01-16 20:36:26"
+            try:
+                dt = pd.to_datetime(date_str).to_pydatetime()
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            except:
+                return date_str
+                
+        # Indonesian Month Map
+        MONTH_MAP = {
+            1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
+            5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus",
+            9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+        }
+        
+        day = dt.day
+        month = MONTH_MAP[dt.month]
+        year = dt.year
+        
+        # Optional: Add time if needed, but user asked for date
+        return f"{day} {month} {year}"
+    except:
+        return "Hari ini"
 
 # Cache file for persistent scanner results
 CACHE_FILE = ".scanner_cache.pkl"
@@ -257,6 +292,26 @@ st.markdown("""
         color: #fff;
     }
 
+
+    /* News Cards */
+    .news-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .news-card a {
+        text-decoration: none !important;
+        text-decoration-line: none !important;
+        border-bottom: none !important;
+    }
+    .news-card a:hover {
+        text-decoration: none !important;
+        border-bottom: none !important;
+    }
+    .news-card:hover {
+        background: rgba(255, 45, 117, 0.1) !important;
+        border-left-width: 6px !important;
+        transform: translateX(5px);
+    }
+
     /* Cards */
     div[data-testid="stExpander"] {
         background: var(--card-bg) !important;
@@ -463,7 +518,7 @@ def get_news_sentiment(ticker):
             try:
                 headers = {'User-Agent': random.choice(USER_AGENTS)}
                 res = requests.get(rss_url, headers=headers, timeout=5)
-                soup = BeautifulSoup(res.text, 'html.parser') 
+                soup = BeautifulSoup(res.text, 'xml') 
                 items = soup.find_all('item', limit=8)
                 
                 for item in items:
@@ -471,7 +526,7 @@ def get_news_sentiment(ticker):
                         title = item.title.text if item.title else ""
                         link = item.link.text if item.link else ""
                         date_raw = item.pubDate.text if item.pubDate else "Today"
-                        date = " ".join(date_raw.split()[:3])
+                        date = get_relative_time(date_raw)
 
                         title_clean = title.strip()
                         if not title_clean or len(title_clean) < 20: continue
@@ -821,7 +876,11 @@ with st.sidebar:
             st.rerun()
     with s_col[1]:
         if st.button("Refresh", use_container_width=True, type="secondary"):
+            # Don't clear global cache, only news/analysis
+            get_news_sentiment.clear()
+            get_crypto_stats.clear()
             clear_watchlist_cache()
+            clear_cached_results()
             if 'watchlist_data_list' in st.session_state:
                 del st.session_state.watchlist_data_list
             st.session_state.refresh_market = True 
@@ -1696,11 +1755,18 @@ if main_active_tab == "Chart":
                             st.markdown("---")
                             if row['News List']:
                                 for news in row['News List']:
+                                    news_url = news.get('link', '#')
                                     st.markdown(f"""
-                                        <div style="margin-bottom: 20px; padding: 12px; border-left: 4px solid #ff2d75; background: rgba(255,255,255,0.03); border-radius: 0 8px 8px 0;">
-                                            <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">🗓️ {news.get('date', 'Baru')} | 🌐 {news.get('source')}</div>
-                                            <a href="{news.get('link', '#')}" target="_blank" style="text-decoration: none; color: #ff2d75; font-weight: 700; font-size: 14px; display: block; line-height: 1.4; transition: opacity 0.2s;">
-                                                {news.get('title')}
+                                        <div class="news-card" style="margin-bottom: 12px; border-left: 4px solid #ff2d75; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden;">
+                                            <a href="{news_url}" target="_blank" style="text-decoration: none !important; text-decoration-line: none !important; color: inherit !important; display: block; padding: 12px; border: none !important;">
+                                                <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; display: flex; justify-content: space-between;">
+                                                    <span style="display: flex; align-items: center; gap: 4px;">🗓️ {news.get('date')}</span>
+                                                    <span style="display: flex; align-items: center; gap: 4px;">🌐 {news.get('source')}</span>
+                                                </div>
+                                                <div style="color: #ff2d75; font-weight: 700; font-size: 14px; line-height: 1.4; margin-bottom: 5px; text-decoration: none !important;">
+                                                    {news.get('title')}
+                                                </div>
+                                                <div style="font-size: 9px; color: #848e9c; font-style: italic; text-decoration: none !important;">Klik untuk baca selengkapnya di sumber asli &rarr;</div>
                                             </a>
                                         </div>
                                     """, unsafe_allow_html=True)
