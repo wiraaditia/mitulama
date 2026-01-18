@@ -91,14 +91,17 @@ def load_cached_results():
         try:
             with open(CACHE_FILE, 'rb') as f:
                 data = pickle.load(f)
+                
                 # Check 5-minute inactivity (300 seconds)
                 if time.time() - data.get('last_heartbeat', 0) > 300:
                     os.remove(CACHE_FILE)
                     return None
+                    
                 return data
         except:
             return None
     return None
+
 
 def save_cached_results(results, timestamp):
     """Save scanner results to cache file with heartbeat"""
@@ -791,8 +794,8 @@ def get_top_crypto_tickers(count=1000):
     try:
         for page in range(1, pages + 1):
             url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}"
-            url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}"
-            response = requests.get(url, timeout=5)
+
+            response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 page_data = response.json()
                 all_data.extend(page_data)
@@ -807,6 +810,9 @@ def get_top_crypto_tickers(count=1000):
 
 # Initialize TICKERS with CoinGecko data (Up to 1000 coins)
 CRYPTO_DATA = get_top_crypto_tickers(1000)
+
+
+
 # Ensure unique tickers and build map
 TICKERS = []
 COIN_MAP = {}
@@ -901,7 +907,7 @@ def get_news_sentiment(ticker):
         for rss_url in sources:
             try:
                 headers = {'User-Agent': random.choice(USER_AGENTS)}
-                res = requests.get(rss_url, headers=headers, timeout=3)
+                res = requests.get(rss_url, headers=headers, timeout=5)
                 soup = BeautifulSoup(res.text, 'xml') 
                 items = soup.find_all('item', limit=8)
                 
@@ -1317,12 +1323,10 @@ with st.sidebar:
                 }
                 
                 
-                # Fetch Parallel (REMOVED: Overkill for memory lookup, using simple loop for speed)
-                # with ThreadPoolExecutor(max_workers=30) as executor:
-                #    results = list(executor.map(fetch_ticker_info, TICKERS))
+                # Fetch Parallel
+                with ThreadPoolExecutor(max_workers=30) as executor:
+                    results = list(executor.map(fetch_ticker_info, TICKERS))
                 
-                results = [fetch_ticker_info(t) for t in TICKERS]
-
                 for res in results:
                     if res:
                         wl.append(res)
@@ -1974,9 +1978,7 @@ if main_active_tab == "Chart":
                 
                 p_bar.progress((i + 1) / len(CRYPTO_DATA))
             
-            # Limit Deep Dive to max 30 assets to prevent freezing
-            if len(promising_tickers) > 30:
-                promising_tickers = promising_tickers[:30]
+
             
             p_bar.empty()
             
