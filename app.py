@@ -162,10 +162,7 @@ def clear_watchlist_cache():
 # --- CONFIG DASHBOARD ---
 st.set_page_config(page_title="mitulama", page_icon="favicon.png", layout="wide")
 
-def set_ticker(ticker):
-    st.session_state.tv_symbol = ticker
 
-@st.fragment
 def render_market_analysis(df):
     # --- SECTOR ANALYSIS & CHARTS ---
     st.markdown("### MARKET & SECTOR ANALYSIS")
@@ -351,7 +348,8 @@ def render_market_analysis(df):
                 marker_color=bar_df['Color'],
                 texttemplate='%{text:.2f}%', # Format displayed text
                 textposition='outside', # Text outside bar
-                hovertemplate = "<b>%{x}</b><br>Avg Change: %{y:.2f}%<extra></extra>"
+                hovertemplate = "<b>%{x}</b><br>Avg Change: %{y:.2f}%<extra></extra>",
+                cliponaxis=False
             )
             fig_bar.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
@@ -793,7 +791,8 @@ def get_top_crypto_tickers(count=1000):
     try:
         for page in range(1, pages + 1):
             url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}"
-            response = requests.get(url, timeout=10)
+            url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}"
+            response = requests.get(url, timeout=5)
             if response.status_code == 200:
                 page_data = response.json()
                 all_data.extend(page_data)
@@ -902,7 +901,7 @@ def get_news_sentiment(ticker):
         for rss_url in sources:
             try:
                 headers = {'User-Agent': random.choice(USER_AGENTS)}
-                res = requests.get(rss_url, headers=headers, timeout=5)
+                res = requests.get(rss_url, headers=headers, timeout=3)
                 soup = BeautifulSoup(res.text, 'xml') 
                 items = soup.find_all('item', limit=8)
                 
@@ -1317,10 +1316,13 @@ with st.sidebar:
                     "BNB": "Binance Coin", "SOL": "Solana", "XRP": "Ripple"
                 }
                 
-                # Fetch Parallel
-                with ThreadPoolExecutor(max_workers=30) as executor:
-                    results = list(executor.map(fetch_ticker_info, TICKERS))
                 
+                # Fetch Parallel (REMOVED: Overkill for memory lookup, using simple loop for speed)
+                # with ThreadPoolExecutor(max_workers=30) as executor:
+                #    results = list(executor.map(fetch_ticker_info, TICKERS))
+                
+                results = [fetch_ticker_info(t) for t in TICKERS]
+
                 for res in results:
                     if res:
                         wl.append(res)
@@ -1971,6 +1973,10 @@ if main_active_tab == "Chart":
                     promising_tickers.append(coin['symbol'].upper())
                 
                 p_bar.progress((i + 1) / len(CRYPTO_DATA))
+            
+            # Limit Deep Dive to max 30 assets to prevent freezing
+            if len(promising_tickers) > 30:
+                promising_tickers = promising_tickers[:30]
             
             p_bar.empty()
             
