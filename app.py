@@ -14,6 +14,8 @@ import numpy as np
 import decimal
 import email.utils
 from datetime import datetime, timezone, timedelta
+import altair as alt
+import plotly.express as px
 
 def format_price(price):
     """Custom formatter to handle micro-prices without scientific notation"""
@@ -33,6 +35,18 @@ def format_price(price):
         return f"${price:,.4f}"
     else:
         return f"${price:,.2f}"
+
+def format_mcap(value):
+    """Format market cap to T, B, M"""
+    if value is None: return "N/A"
+    if value >= 1e12:
+        return f"${value/1e12:.2f}T"
+    elif value >= 1e9:
+        return f"${value/1e9:.2f}B"
+    elif value >= 1e6:
+        return f"${value/1e6:.2f}M"
+    else:
+        return f"${value:,.0f}"
 
 def get_relative_time(date_str):
     try:
@@ -155,9 +169,8 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600;700&display=swap');
     
-    /* Google AdSense Main Script */
+    /* Google AdSense Main Script removed */
 </style>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4874093418695330" crossorigin="anonymous"></script>
 <style>
     :root {
         --primary: #ff2d75;
@@ -1308,6 +1321,7 @@ if main_active_tab == "Chart":
             new TradingView.widget(
             {{
                 "autosize": true,
+                "fullscreen": true,
                 "symbol": "{tv_symbol}",
                 "interval": "{current_tf_code}",
                 "timezone": "Asia/Jakarta",
@@ -1316,13 +1330,20 @@ if main_active_tab == "Chart":
                 "locale": "en",
                 "enable_publishing": false,
                 "allow_symbol_change": true,
+                "study_templates": true,
                 "container_id": "tradingview_chart",
                 "toolbar_bg": "#1e222d",
                 "hide_side_toolbar": false,
+                "allow_symbol_change": true,
                 "details": true,
                 "hotlist": true,
                 "calendar": false,
-                "withdateranges": true
+                "show_popup_button": true,
+                "popup_width": "1000",
+                "popup_height": "650",
+                "withdateranges": true,
+                "enabled_features": ["header_fullscreen_button", "use_localstorage_for_settings", "items_favoriting", "save_chart_properties_to_local_storage"],
+                "disabled_features": []
             }});
             </script>
             </div>
@@ -1332,21 +1353,6 @@ if main_active_tab == "Chart":
 
         st.markdown("---")
         # --- GOOGLE ADSENSE AREA ---
-        st.components.v1.html("""
-            <div style="text-align:center; padding:10px; background:rgba(255,255,255,0.02); border-radius:8px;">
-                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4874093418695330" crossorigin="anonymous"></script>
-                <!-- Iklan 1 -->
-                <ins class="adsbygoogle"
-                     style="display:block"
-                     data-ad-client="ca-pub-4874093418695330"
-                     data-ad-slot="9330979435"
-                     data-ad-format="auto"
-                     data-full-width-responsive="true"></ins>
-                <script>
-                     (adsbygoogle = window.adsbygoogle || []).push({});
-                </script>
-            </div>
-        """, height=200)
 
         try:
             # For Crypto, we use the CoinGecko data from COIN_MAP
@@ -1361,7 +1367,7 @@ if main_active_tab == "Chart":
                 # But it has it in the detailed endpoint which we'll show in Stats tab
                 st.write(f"Asset digital {coin_info.get('name')} saat ini diperdagangkan pada harga ${coin_info.get('current_price'):,}.")
             with p2:
-                st.markdown("#### 💎 Market Info")
+                st.markdown("####  Market Info")
                 st.markdown(f"**ATH:** ${coin_info.get('ath', 0):,}")
                 st.markdown(f"**Circulating Supply:** {coin_info.get('circulating_supply', 0):,.0f}")
                 
@@ -1623,6 +1629,264 @@ if main_active_tab == "Chart":
     if st.session_state.scan_results is not None:
         df = st.session_state.scan_results
         
+        # --- SECTOR ANALYSIS & CHARTS ---
+        st.markdown("### MARKET & SECTOR ANALYSIS")
+        
+        # 1. Prepare Data for Charts
+        # Simple Sector Inference (Same as diag script)
+        sectors = {
+            'Layer 1': ['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'TRX', 'NEAR', 'KAS', 'SUI', 'SEI', 'APT', 'ALGO', 'HBAR', 'XRP', 'BNB'],
+            'DeFi': ['UNI', 'LINK', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'RUNE', 'INJ', 'JUP', 'DYDX', 'LDO'],
+            'AI & Big Data': ['TAO', 'FET', 'RNDR', 'NEAR', 'GRT', 'AGIX', 'WLD', 'OCEAN', 'JASMY', 'AKT'],
+            'Meme': ['DOGE', 'SHIB', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME', 'BOME', 'BRETT', 'MOG'],
+            'Gaming/Metaverse': ['ICP', 'IMX', 'SAND', 'MANA', 'AXS', 'GALA', 'BEAM', 'RON'],
+            'Layer 2': ['MATIC', 'ARB', 'OP', 'MNT', 'STRK', 'BLAST', 'BASE'],
+            'RWA': ['ONDO', 'POLYX', 'PENDLE']
+        }
+        
+        # Process df to get sector data
+        sector_counts = {k: 0 for k in sectors}
+        sector_counts['Others'] = 0
+        sector_performance = {k: [] for k in sectors}
+        sector_performance['Others'] = []
+        
+        for idx, row in df.iterrows():
+            ticker = row['Ticker']
+            chg = row['Change %']
+            assigned = False
+            for s, tickers in sectors.items():
+                if ticker in tickers:
+                    sector_counts[s] += 1
+                    sector_performance[s].append(chg)
+                    assigned = True
+                    break
+            if not assigned:
+                sector_counts['Others'] += 1
+                sector_performance['Others'].append(chg)
+
+        # Create DataFrames for Charts
+        # Pie Chart Data (Distribution)
+        pie_data = pd.DataFrame([{'Sector': k, 'Count': v} for k, v in sector_counts.items() if v > 0])
+        if not pie_data.empty:
+            pie_data['Percent'] = ((pie_data['Count'] / pie_data['Count'].sum()) * 100).round(1)
+        
+        # Bar Chart Data (Performance)
+        bar_data = []
+        for s, changes in sector_performance.items():
+            if changes:
+                avg_chg = sum(changes) / len(changes)
+                bar_data.append({'Sector': s, 'Avg Change %': avg_chg})
+        bar_df = pd.DataFrame(bar_data)
+
+        # --- SECTOR INSIGHTS & METRICS ---
+        if not pie_data.empty and not bar_df.empty:
+            # 1. Determine Dominance & Top Performance
+            dominant_sector = pie_data.sort_values('Count', ascending=False).iloc[0]
+            top_sector = bar_df.sort_values('Avg Change %', ascending=False).iloc[0]
+            
+            # 2. AI Forecast Logic (Simple Heuristic Rule-Based)
+            forecast_text = ""
+            forecast_confidence = 0
+            
+            # Logic: If Top Sector is Layer 1 or Layer 2 -> Infrastructure Phase
+            if top_sector['Sector'] in ['Layer 1', 'Layer 2']:
+                forecast_text = "Rotasi modal sedang mengarah ke infrastruktur (Layer 1/2). Dalam 3 bulan ke depan, narasi akan berfokus pada **Ecosystem Growth & TVL Acc.**. Altcoin fundamental akan memimpin fase ini."
+                forecast_confidence = 85
+            # Logic: If Top Sector is Meme -> Speculative Phase
+            elif top_sector['Sector'] == 'Meme':
+                forecast_text = "Pasar dalam fase **High Risc / High Reward**. Dominasi Meme coin menandakan 'Risk-On' ekstrem. Hati-hati koreksi tajam. Dalam 3 bulan, kemungkinan profit akan dirotasi kembali ke sektor 'Real Yield' (DeFi/RWA)."
+                forecast_confidence = 78
+            # Logic: If Top Sector is AI -> Tech Phase
+            elif top_sector['Sector'] == 'AI & Big Data':
+                forecast_text = "Tren AI sedang memimpin. Narasi ini bersifat jangka panjang. Prediksi 3 bulan ke depan: **AI Supercycle** mungkin berlanjut seiring rilis teknologi baru, namun selektif pada proyek dengan produk nyata."
+                forecast_confidence = 92
+            # Logic: If Top Sector is RWA/DeFi -> Utility Phase
+            elif top_sector['Sector'] in ['RWA', 'DeFi']:
+                forecast_text = "Institusi mulai melirik Real World Asset (RWA). Ini adalah fase akumulasi 'Smart Money'. 3 Bulan ke depan berpotensi menjadi **RWA Summer**."
+                forecast_confidence = 88
+            else:
+                forecast_text = f"Sektor {top_sector['Sector']} memimpin kenaikan. Pasar mencari narasi baru. Pantau likuiditas BTC untuk konfirmasi arah selanjutnya."
+                forecast_confidence = 70
+
+            # UI: Metrics Display
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.markdown(f"""
+                <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">Dominasi Sektor</div>
+                    <div style="font-size:16px; font-weight:800; color:#fff;">{dominant_sector['Sector']}</div>
+                    <div style="font-size:11px; color:#848e9c;">{dominant_sector['Percent']}% dari total asset</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m2:
+                is_pos = top_sector['Avg Change %'] >= 0
+                color = "#00c853" if is_pos else "#ff5252"
+                st.markdown(f"""
+                <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">Top Performer (24h)</div>
+                    <div style="font-size:16px; font-weight:800; color:{color};">{top_sector['Sector']}</div>
+                    <div style="font-size:11px; color:{color};">{top_sector['Avg Change %']:+.2f}% Avg Change</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m3:
+                st.markdown(f"""
+                <div style="background:rgba(41, 98, 255, 0.1); padding:10px; border-radius:6px; border:1px solid #2962ff;">
+                    <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">AI Forecast Confidence</div>
+                    <div style="font-size:16px; font-weight:800; color:#2962ff;">{forecast_confidence}%</div>
+                    <div style="font-size:11px; color:#848e9c;">Probability Score</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<div style='margin-bottom:15px'></div>", unsafe_allow_html=True)
+            
+            # Forecast Expander
+            with st.expander("🔮 AI Analisis & Prediksi Q3 (3 Bulan)", expanded=True):
+                st.markdown(f"""
+                <div style="border-left: 3px solid #2962ff; padding-left: 15px; margin: 5px 0;">
+                    <span style="font-size: 14px; color: #e0e0e0; font-weight: 500;">"{forecast_text}"</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Charts Layout
+        # --- INTERACTIVE CHARTS & FILTERING (PLOTLY) ---
+        
+        c1, c2 = st.columns(2)
+        
+        # Captured Selections
+        filter_sector = None
+        
+        with c1:
+            st.caption("Distribution by Sector (Click to Filter)")
+            if not pie_data.empty:
+                # Plotly Pie (Donut)
+                fig_pie = px.pie(
+                    pie_data, 
+                    values='Count', 
+                    names='Sector', 
+                    hole=0.4,
+                    color='Sector',
+                    color_discrete_sequence=px.colors.sequential.Magma,
+                    height=350
+                )
+                fig_pie.update_traces(
+                    textposition='inside', 
+                    textinfo='percent+label',
+                    hovertemplate = "<b>%{label}</b><br>Count: %{value}<br>To: %{percent}<extra></extra>"
+                )
+                fig_pie.update_layout(
+                    showlegend=True,
+                    legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=0),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(t=20, b=20, l=0, r=0),
+                    font=dict(family="Orbitron", color="white")
+                )
+                
+                # Interactive Plotly Chart
+                event_pie = st.plotly_chart(fig_pie, use_container_width=True, on_select="rerun", selection_mode="points")
+            else:
+                st.info("No sector data available.")
+                event_pie = None
+                
+        with c2:
+            st.caption("Potential Performance by Sector (Click to Filter)")
+            if not bar_df.empty:
+                # 1. Sort Data High to Low
+                bar_df = bar_df.sort_values(by='Avg Change %', ascending=False)
+                
+                # Plotly Bar
+                # Add color column based on value
+                bar_df['Color'] = bar_df['Avg Change %'].apply(lambda x: '#00c853' if x > 0 else '#ff5252')
+                
+                fig_bar = px.bar(
+                    bar_df, 
+                    x='Sector', 
+                    y='Avg Change %',
+                    color='Avg Change %', # Gradient effect or just use discrete
+                    color_continuous_scale=['#ff5252', '#00c853'],
+                    text='Avg Change %', # Add text for labels
+                    height=350
+                )
+                # Force specific colors for clarity if preferred, but gradient is nice
+                # Using update_traces for precise control
+                fig_bar.update_traces(
+                    marker_color=bar_df['Color'],
+                    texttemplate='%{text:.2f}%', # Format displayed text
+                    textposition='outside', # Text outside bar
+                    hovertemplate = "<b>%{x}</b><br>Avg Change: %{y:.2f}%<extra></extra>"
+                )
+                fig_bar.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(t=30, b=20, l=20, r=20), # Increase top margin for text
+                    font=dict(family="Orbitron", color="white"),
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                    showlegend=False
+                )
+                
+                event_bar = st.plotly_chart(fig_bar, use_container_width=True, on_select="rerun", selection_mode="points")
+            else:
+                st.info("No performance data available.")
+                event_bar = None
+
+        # --- PROCESS SELECTION FILTER ---
+        
+        # Check selection from Pie
+        if event_pie and len(event_pie.selection["points"]) > 0:
+            # Plotly selection returns list of points. For pie, point_index corresponds to data row index?
+            # It returns dictionaries with point_index.
+            # However, for Pie Chart, 'point_index' usually maps to the input dataframe index if not sorted differently?
+            # Let's check 'point_index'
+            try:
+                # Get the first selected point
+                point = event_pie.selection["points"][0]
+                # In Plotly Express Pie, usually maps to row index of sorted data? 
+                # Safer: px.pie usually preserves order or we check custom_data?
+                # Let's try to map by point_index safe assumption for simple pie
+                idx = point["point_index"]
+                # Warning: Pie chart ordering might change data order. 
+                # But simple mapping:
+                filter_sector = pie_data.iloc[idx]['Sector']
+            except: pass
+            
+        # Check selection from Bar
+        if not filter_sector and event_bar and len(event_bar.selection["points"]) > 0:
+            try:
+                point = event_bar.selection["points"][0]
+                # Bar chart x-axis is usually category
+                # Plotly `selection` might contain 'x' value directly?
+                # Actually newer Streamlit returns the data directly if configured?
+                # selection['points'][0] keys: point_index, curve_number, ...
+                # It does NOT usually return x/y values in the point dict for `st.plotly_chart` specifically unless...
+                # Actually, relying on index is standard.
+                idx = point["point_index"]
+                filter_sector = bar_df.iloc[idx]['Sector']
+            except: pass
+
+        # Apply Filter
+        if filter_sector:
+            st.info(f"🔍 Memfilter Sektor: **{filter_sector}**")
+            
+            # Reset button
+            if st.button("Reset Filter", type="secondary"):
+                st.rerun() # Just rerun to clear selection state (native behavior clears usually or we force it)
+            
+            # Filtering logic
+            filtered_indices = []
+            for idx, row in df.iterrows():
+                ticker = row['Ticker']
+                # Check sector map
+                sector_match = "Others"
+                for s, tickers in sectors.items():
+                    if ticker in tickers:
+                        sector_match = s
+                        break
+                if sector_match == filter_sector:
+                    filtered_indices.append(idx)
+            
+            df = df.iloc[filtered_indices]
+
         # --- NEW: RESULT SEARCH FILTER (WITH SUBMIT BUTTON) ---
         st.markdown("### Filter Hasil")
         
@@ -1732,7 +1996,7 @@ if main_active_tab == "Chart":
                                 </div>
                                 <div class="metric-item">
                                     <span class="metric-label">Mkt Cap</span>
-                                    <span class="metric-value">${coin_data.get('market_cap', 0)/1e9:.1f}B</span>
+                                    <span class="metric-value">{format_mcap(coin_data.get('market_cap', 0))}</span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
@@ -1781,7 +2045,7 @@ if main_active_tab == "Chart":
             
             # --- PROFESSIONAL TABLE UX IN ALL TAB ---
             st.markdown("---")
-            st.markdown("### 📊 Tabel Detail Semua Asset")
+            st.markdown("###  Tabel Detail Semua Asset")
             st.markdown("""
             <style>
                 /* Dataframe header styling */
