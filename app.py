@@ -162,6 +162,400 @@ def clear_watchlist_cache():
 # --- CONFIG DASHBOARD ---
 st.set_page_config(page_title="mitulama", page_icon="favicon.png", layout="wide")
 
+def set_ticker(ticker):
+    st.session_state.tv_symbol = ticker
+
+@st.fragment
+def render_market_analysis(df):
+    # --- SECTOR ANALYSIS & CHARTS ---
+    st.markdown("### MARKET & SECTOR ANALYSIS")
+    
+    # 1. Prepare Data for Charts
+    # Simple Sector Inference (Same as diag script)
+    sectors = {
+        'Layer 1': ['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'TRX', 'NEAR', 'KAS', 'SUI', 'SEI', 'APT', 'ALGO', 'HBAR', 'XRP', 'BNB'],
+        'DeFi': ['UNI', 'LINK', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'RUNE', 'INJ', 'JUP', 'DYDX', 'LDO'],
+        'AI & Big Data': ['TAO', 'FET', 'RNDR', 'NEAR', 'GRT', 'AGIX', 'WLD', 'OCEAN', 'JASMY', 'AKT'],
+        'Meme': ['DOGE', 'SHIB', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME', 'BOME', 'BRETT', 'MOG'],
+        'Gaming/Metaverse': ['ICP', 'IMX', 'SAND', 'MANA', 'AXS', 'GALA', 'BEAM', 'RON'],
+        'Layer 2': ['MATIC', 'ARB', 'OP', 'MNT', 'STRK', 'BLAST', 'BASE'],
+        'RWA': ['ONDO', 'POLYX', 'PENDLE']
+    }
+    
+    # Process df to get sector data
+    sector_counts = {k: 0 for k in sectors}
+    sector_counts['Others'] = 0
+    sector_performance = {k: [] for k in sectors}
+    sector_performance['Others'] = []
+    
+    for idx, row in df.iterrows():
+        ticker = row['Ticker']
+        chg = row['Change %']
+        assigned = False
+        for s, tickers in sectors.items():
+            if ticker in tickers:
+                sector_counts[s] += 1
+                sector_performance[s].append(chg)
+                assigned = True
+                break
+        if not assigned:
+            sector_counts['Others'] += 1
+            sector_performance['Others'].append(chg)
+
+    # Create DataFrames for Charts
+    # Pie Chart Data (Distribution)
+    pie_data = pd.DataFrame([{'Sector': k, 'Count': v} for k, v in sector_counts.items() if v > 0])
+    if not pie_data.empty:
+        pie_data['Percent'] = ((pie_data['Count'] / pie_data['Count'].sum()) * 100).round(1)
+    
+    # Bar Chart Data (Performance)
+    bar_data = []
+    for s, changes in sector_performance.items():
+        if changes:
+            avg_chg = sum(changes) / len(changes)
+            bar_data.append({'Sector': s, 'Avg Change %': avg_chg})
+    bar_df = pd.DataFrame(bar_data)
+
+    # --- SECTOR INSIGHTS & METRICS ---
+    if not pie_data.empty and not bar_df.empty:
+        # 1. Determine Dominance & Top Performance
+        dominant_sector = pie_data.sort_values('Count', ascending=False).iloc[0]
+        top_sector = bar_df.sort_values('Avg Change %', ascending=False).iloc[0]
+        
+        # 2. AI Forecast Logic (Simple Heuristic Rule-Based)
+        forecast_text = ""
+        forecast_confidence = 0
+        
+        # Logic: If Top Sector is Layer 1 or Layer 2 -> Infrastructure Phase
+        if top_sector['Sector'] in ['Layer 1', 'Layer 2']:
+            forecast_text = "Rotasi modal sedang mengarah ke infrastruktur (Layer 1/2). Dalam 3 bulan ke depan, narasi akan berfokus pada **Ecosystem Growth & TVL Acc.**. Altcoin fundamental akan memimpin fase ini."
+            forecast_confidence = 85
+        # Logic: If Top Sector is Meme -> Speculative Phase
+        elif top_sector['Sector'] == 'Meme':
+            forecast_text = "Pasar dalam fase **High Risc / High Reward**. Dominasi Meme coin menandakan 'Risk-On' ekstrem. Hati-hati koreksi tajam. Dalam 3 bulan, kemungkinan profit akan dirotasi kembali ke sektor 'Real Yield' (DeFi/RWA)."
+            forecast_confidence = 78
+        # Logic: If Top Sector is AI -> Tech Phase
+        elif top_sector['Sector'] == 'AI & Big Data':
+            forecast_text = "Tren AI sedang memimpin. Narasi ini bersifat jangka panjang. Prediksi 3 bulan ke depan: **AI Supercycle** mungkin berlanjut seiring rilis teknologi baru, namun selektif pada proyek dengan produk nyata."
+            forecast_confidence = 92
+        # Logic: If Top Sector is RWA/DeFi -> Utility Phase
+        elif top_sector['Sector'] in ['RWA', 'DeFi']:
+            forecast_text = "Institusi mulai melirik Real World Asset (RWA). Ini adalah fase akumulasi 'Smart Money'. 3 Bulan ke depan berpotensi menjadi **RWA Summer**."
+            forecast_confidence = 88
+        else:
+            forecast_text = f"Sektor {top_sector['Sector']} memimpin kenaikan. Pasar mencari narasi baru. Pantau likuiditas BTC untuk konfirmasi arah selanjutnya."
+            forecast_confidence = 70
+
+        # UI: Metrics Display
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.markdown(f'''
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">Dominasi Sektor</div>
+                <div style="font-size:16px; font-weight:800; color:#fff;">{dominant_sector['Sector']}</div>
+                <div style="font-size:11px; color:#848e9c;">{dominant_sector['Percent']}% dari total asset</div>
+            </div>
+            ''', unsafe_allow_html=True)
+        with m2:
+            is_pos = top_sector['Avg Change %'] >= 0
+            color = "#00c853" if is_pos else "#ff5252"
+            st.markdown(f'''
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">Top Performer (24h)</div>
+                <div style="font-size:16px; font-weight:800; color:{color};">{top_sector['Sector']}</div>
+                <div style="font-size:11px; color:{color};">{top_sector['Avg Change %']:+.2f}% Avg Change</div>
+            </div>
+            ''', unsafe_allow_html=True)
+        with m3:
+            st.markdown(f'''
+            <div style="background:rgba(41, 98, 255, 0.1); padding:10px; border-radius:6px; border:1px solid #2962ff;">
+                <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">AI Forecast Confidence</div>
+                <div style="font-size:16px; font-weight:800; color:#2962ff;">{forecast_confidence}%</div>
+                <div style="font-size:11px; color:#848e9c;">Probability Score</div>
+            </div>
+            ''', unsafe_allow_html=True)
+        
+        st.markdown("<div style='margin-bottom:15px'></div>", unsafe_allow_html=True)
+        
+        # Forecast Expander
+        with st.expander("🔮 AI Analisis & Prediksi Q3 (3 Bulan)", expanded=True):
+            st.markdown(f'''
+            <div style="border-left: 3px solid #2962ff; padding-left: 15px; margin: 5px 0;">
+                <span style="font-size: 14px; color: #e0e0e0; font-weight: 500;">"{forecast_text}"</span>
+            </div>
+            ''', unsafe_allow_html=True)
+
+    # Charts Layout
+    # --- INTERACTIVE CHARTS & FILTERING (PLOTLY) ---
+    
+    c1, c2 = st.columns(2)
+    
+    # Captured Selections
+    filter_sector = None
+    
+    with c1:
+        st.caption("Distribution by Sector (Click to Filter)")
+        if not pie_data.empty:
+            # Plotly Pie (Donut)
+            fig_pie = px.pie(
+                pie_data, 
+                values='Count', 
+                names='Sector', 
+                hole=0.4,
+                color='Sector',
+                color_discrete_sequence=px.colors.sequential.Magma,
+                height=350
+            )
+            fig_pie.update_traces(
+                textposition='inside', 
+                textinfo='percent+label',
+                hovertemplate = "<b>%{label}</b><br>Count: %{value}<br>To: %{percent}<extra></extra>"
+            )
+            fig_pie.update_layout(
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=0),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(t=20, b=20, l=0, r=0),
+                font=dict(family="Orbitron", color="white")
+            )
+            
+            # Interactive Plotly Chart
+            event_pie = st.plotly_chart(fig_pie, use_container_width=True, on_select="rerun", selection_mode="points")
+        else:
+            st.info("No sector data available.")
+            event_pie = None
+            
+    with c2:
+        st.caption("Potential Performance by Sector (Click to Filter)")
+        if not bar_df.empty:
+            # 1. Sort Data High to Low
+            bar_df = bar_df.sort_values(by='Avg Change %', ascending=False)
+            
+            # Plotly Bar
+            # Add color column based on value
+            bar_df['Color'] = bar_df['Avg Change %'].apply(lambda x: '#00c853' if x > 0 else '#ff5252')
+            
+            fig_bar = px.bar(
+                bar_df, 
+                x='Sector', 
+                y='Avg Change %',
+                color='Avg Change %', # Gradient effect or just use discrete
+                color_continuous_scale=['#ff5252', '#00c853'],
+                text='Avg Change %', # Add text for labels
+                height=350
+            )
+            # Force specific colors for clarity if preferred, but gradient is nice
+            # Using update_traces for precise control
+            fig_bar.update_traces(
+                marker_color=bar_df['Color'],
+                texttemplate='%{text:.2f}%', # Format displayed text
+                textposition='outside', # Text outside bar
+                hovertemplate = "<b>%{x}</b><br>Avg Change: %{y:.2f}%<extra></extra>"
+            )
+            fig_bar.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(t=30, b=20, l=20, r=20), # Increase top margin for text
+                font=dict(family="Orbitron", color="white"),
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                showlegend=False
+            )
+            
+            event_bar = st.plotly_chart(fig_bar, use_container_width=True, on_select="rerun", selection_mode="points")
+        else:
+            st.info("No performance data available.")
+            event_bar = None
+
+    # --- PROCESS SELECTION FILTER ---
+    
+    # Check selection from Pie
+    if event_pie and len(event_pie.selection["points"]) > 0:
+        try:
+            point = event_pie.selection["points"][0]
+            idx = point["point_index"]
+            filter_sector = pie_data.iloc[idx]['Sector']
+        except: pass
+        
+    # Check selection from Bar
+    if not filter_sector and event_bar and len(event_bar.selection["points"]) > 0:
+        try:
+            point = event_bar.selection["points"][0]
+            idx = point["point_index"]
+            filter_sector = bar_df.iloc[idx]['Sector']
+        except: pass
+
+    # Apply Filter
+    if filter_sector:
+        st.info(f" Memfilter Sektor: **{filter_sector}**")
+        if st.button("Reset Filter", type="secondary"):
+            st.rerun()
+        
+        # Filtering logic
+        filtered_indices = []
+        for idx, row in df.iterrows():
+            ticker = row['Ticker']
+            sector_match = "Others"
+            for s, tickers in sectors.items():
+                if ticker in tickers:
+                    sector_match = s
+                    break
+            if sector_match == filter_sector:
+                filtered_indices.append(idx)
+        
+        df = df.iloc[filtered_indices]
+
+    st.markdown("### Filter Hasil")
+    
+    with st.form(key="search_form", clear_on_submit=False):
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            result_search = st.text_input(
+                "search_input",
+                placeholder="Ketik kode crypto", 
+                label_visibility="collapsed",
+                key="search_query"
+            )
+        with col2:
+            search_submitted = st.form_submit_button("Cari", use_container_width=True)
+    
+    if result_search and (search_submitted or result_search):
+        search_term = result_search.lower()
+        df = df[
+            df['Ticker'].str.lower().str.contains(search_term) | 
+            df['Status'].str.lower().str.contains(search_term) |
+            df['Analysis'].str.lower().str.contains(search_term)
+        ]
+        st.caption(f"Menampilkan {len(df)} hasil pencarian untuk '{result_search}'.")
+    
+    watchlist_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['WATCHLIST', 'CORE ASSET', 'UNDERVALUED'])]
+    exclusive_hot_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['ALPHA', 'WHALE', 'BREAKOUT', 'BULLISH', 'TRENDING', 'BUZZ'])]
+    all_potential_list = [r for i, r in df.iterrows() if r['Status'] != 'HOLD']
+    total_potential = len(all_potential_list)
+    
+    result_tab_options = [
+        f"All ({total_potential})", 
+        f"Watchlist ({len(watchlist_list)})", 
+        f"Top Picks ({len(exclusive_hot_list)})"
+    ]
+    
+    if 'active_result_tab' not in st.session_state:
+        st.session_state.active_result_tab = result_tab_options[0]
+    else:
+        current_category = st.session_state.active_result_tab.split(' (')[0]
+        if current_category == "All Potential": current_category = "All"
+        new_tab_match = [opt for opt in result_tab_options if opt.startswith(current_category)]
+        if new_tab_match:
+            st.session_state.active_result_tab = new_tab_match[0]
+        else:
+            st.session_state.active_result_tab = result_tab_options[0]
+
+    st.markdown("---")
+    active_tab = st.radio(
+        "Pilih Tampilan:",
+        result_tab_options,
+        horizontal=True,
+        key="active_result_tab",
+        label_visibility="collapsed"
+    )
+    
+    def render_grid_inner(rows, key_prefix):
+        if not rows:
+            st.info("Belum ada asset yang memenuhi kriteria ini.")
+            return
+        
+        cols = st.columns(3)
+        for idx, row in enumerate(rows):
+            with cols[idx % 3]:
+                st.markdown(f'<div id="card-{row['Ticker']}"></div>', unsafe_allow_html=True)
+                ticker_clean = row['Ticker']
+                coin_data = COIN_MAP.get(ticker_clean, {})
+                logo_url = coin_data.get('image', '')
+                
+                with st.container(border=True):
+                    h_col1, h_col2 = st.columns([2, 1])
+                    with h_col1:
+                        st.markdown(f'''
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="width:24px; height:24px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05);">
+                                    <img src="{logo_url}" style="width:100%; height:100%; object-fit:contain;">
+                                </div>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 14px; color: #e0e0e0; line-height: 1;">{ticker_clean}</div>
+                                    <div style="font-size: 10px; color: #848e9c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">{row.get('Name', '')}</div>
+                                </div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                        st.markdown(f"<span style='font-size: 18px; font-weight: 800; color: #fff;'>{format_price(row['Price'])}</span>", unsafe_allow_html=True)
+                    with h_col2:
+                        st.markdown(f"<div style='text-align: right; font-size: 11px; font-weight: 700; color: #848e9c; margin-top: 5px;'>{row['Status']}</div>", unsafe_allow_html=True)
+
+                    st.markdown(f'''
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <span class="metric-label">24h Chg</span>
+                                <span class="metric-value">{row['Change %']:.2f}%</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Mkt Cap</span>
+                                <span class="metric-value">{format_mcap(coin_data.get('market_cap', 0))}</span>
+                            </div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+
+                    st.markdown(f'''
+                        <div style="display: flex; gap: 15px; margin-top: 10px; margin-bottom: 5px;">
+                            <div style="font-size: 10px; color: #848e9c;">MEDIA PULSE: <span style="color:#00c853;">{row['News Score']}%</span></div>
+                            <div style="font-size: 10px; color: #848e9c;">SOCIAL BUZZ: <span style="color:#2962ff;">{row['Social Buzz']}%</span></div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+
+                    analysis_title = row['Analysis'].split('\n')[0] if row['Analysis'] else "Analysis"
+                    st.markdown(f"<div style='margin-top: 15px; font-weight: 700; color: #e0e0e0;'>{analysis_title}</div>", unsafe_allow_html=True)
+                    
+                    with st.expander("Detail Riset & Berita"):
+                        st.markdown(row['Analysis'])
+                        st.markdown("---")
+                        if row['News List']:
+                            for news in row['News List']:
+                                news_url = news.get('link', '#')
+                                st.markdown(f'''
+                                    <div class="news-card" style="margin-bottom: 12px; border-left: 4px solid #ff2d75; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden;">
+                                        <a href="{news_url}" target="_blank" style="text-decoration: none !important; text-decoration-line: none !important; color: inherit !important; display: block; padding: 12px; border: none !important;">
+                                            <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; display: flex; justify-content: space-between;">
+                                                <span style="display: flex; align-items: center; gap: 4px;">🗓️ {news.get('date')}</span>
+                                                <span style="display: flex; align-items: center; gap: 4px;">🌐 {news.get('source')}</span>
+                                            </div>
+                                            <div style="color: #ff2d75; font-weight: 700; font-size: 14px; line-height: 1.4; margin-bottom: 5px; text-decoration: none !important;">
+                                                {news.get('title')}
+                                            </div>
+                                            <div style="font-size: 9px; color: #848e9c; font-style: italic; text-decoration: none !important;">Klik untuk baca selengkapnya di sumber asli &rarr;</div>
+                                        </a>
+                                    </div>
+                                ''', unsafe_allow_html=True)
+                        else: st.caption("Tidak ada berita spesifik hari ini.")
+                    
+                    st.button(f"Load Chart", key=f"btn_{key_prefix}_{row['Ticker']}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
+
+    if active_tab.startswith("All"):
+        render_grid_inner(all_potential_list, "all")
+        st.markdown("---")
+        st.markdown("###  Tabel Detail Semua Asset")
+        st.markdown('''
+        <style>
+            [data-testid="stDataFrameResizable"] th {
+                background-color: #2a2e39 !important;
+                color: #848e9c !important;
+            }
+        </style>
+        ''', unsafe_allow_html=True)
+        st.dataframe(df[df['Status'] != 'HOLD'], use_container_width=True, hide_index=True)
+    elif active_tab.startswith("Watchlist"):
+        render_grid_inner(watchlist_list, "wl")
+    elif active_tab.startswith("Top"):
+        render_grid_inner(exclusive_hot_list, "top")
+
 # --- CUSTOM CSS STOCKBIT STYLE ---
 # --- CUSTOM CSS PREMIUM DARK STYLE ---
 # --- CUSTOM CSS TRADINGVIEW / STOCKBIT PRO STYLE ---
@@ -377,28 +771,6 @@ st.markdown("""
         .mobile-hide { display: none !important; }
     }
 
-    /* Floating Back to Top */
-    #back-to-top {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 1000;
-        background: var(--primary);
-        color: white;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-        box-shadow: 0 4px 15px rgba(255, 45, 117, 0.4);
-        text-decoration: none;
-        font-weight: bold;
-        border: 1px solid rgba(255,255,255,0.2);
-    }
-</style>
-<a id="back-to-top" href="#" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;">↑</a>
 """, unsafe_allow_html=True)
 
 # --- ANTI-BLOCKING MEASURES ---
@@ -862,8 +1234,12 @@ with st.sidebar:
             line-height: 1.2 !important;
         }
         .ticker-btn-wrapper button:hover {
-            color: #10d35e !important;
-            background: transparent !important;
+            color: #fff !important;
+            text-shadow: 0 0 10px #ff2d75;
+            background: rgba(255, 45, 117, 0.15) !important;
+            border-radius: 4px;
+            padding-left: 5px !important;
+            transition: all 0.2s ease;
         }
         
         /* Row Styling */
@@ -998,7 +1374,9 @@ with st.sidebar:
             # Fallback for 'id' to fix KeyError
             coin_id = item.get('id', item['ticker'])
             # Layout: [Logo] [Ticker/Name] [Sparkline] [Price/Chg]
-            r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
+            # OLD: [1, 4, 3, 3] -> Price was wrapping
+            # NEW: [1.3, 3.5, 2.2, 4.5] -> More space for Price, less for Sparkline
+            r_col1, r_col2, r_col3, r_col4 = st.columns([1.3, 3.5, 2.2, 4.5])
             
             with r_col1:
                 # Logo (Circular)
@@ -1065,7 +1443,7 @@ with st.sidebar:
         gainers = sorted(items_with_chg, key=lambda x: x['chg'], reverse=True)[:10]
         for item in gainers:
             coin_id = item.get('id', item['ticker'])
-            r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
+            r_col1, r_col2, r_col3, r_col4 = st.columns([1.3, 3.5, 2.2, 4.5])
             with r_col1:
                 st.markdown(f"""
                     <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px; border: 1px solid var(--border-pink);">
@@ -1103,7 +1481,7 @@ with st.sidebar:
             st.info("No data available")
         for item in losers:
             coin_id = item.get('id', item['ticker'])
-            r_col1, r_col2, r_col3, r_col4 = st.columns([1, 4, 3, 3])
+            r_col1, r_col2, r_col3, r_col4 = st.columns([1.3, 3.5, 2.2, 4.5])
             with r_col1:
                 st.markdown(f"""
                     <div style="width:28px; height:28px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05); margin-top:5px; border: 1px solid var(--border-pink);">
@@ -1629,492 +2007,9 @@ if main_active_tab == "Chart":
     if st.session_state.scan_results is not None:
         df = st.session_state.scan_results
         
-        # --- SECTOR ANALYSIS & CHARTS ---
-        st.markdown("### MARKET & SECTOR ANALYSIS")
+        # Call the Fragmented Analysis View (Charts + Interactive Filters + Result Grid)
+        render_market_analysis(df)
         
-        # 1. Prepare Data for Charts
-        # Simple Sector Inference (Same as diag script)
-        sectors = {
-            'Layer 1': ['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'TRX', 'NEAR', 'KAS', 'SUI', 'SEI', 'APT', 'ALGO', 'HBAR', 'XRP', 'BNB'],
-            'DeFi': ['UNI', 'LINK', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'RUNE', 'INJ', 'JUP', 'DYDX', 'LDO'],
-            'AI & Big Data': ['TAO', 'FET', 'RNDR', 'NEAR', 'GRT', 'AGIX', 'WLD', 'OCEAN', 'JASMY', 'AKT'],
-            'Meme': ['DOGE', 'SHIB', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME', 'BOME', 'BRETT', 'MOG'],
-            'Gaming/Metaverse': ['ICP', 'IMX', 'SAND', 'MANA', 'AXS', 'GALA', 'BEAM', 'RON'],
-            'Layer 2': ['MATIC', 'ARB', 'OP', 'MNT', 'STRK', 'BLAST', 'BASE'],
-            'RWA': ['ONDO', 'POLYX', 'PENDLE']
-        }
-        
-        # Process df to get sector data
-        sector_counts = {k: 0 for k in sectors}
-        sector_counts['Others'] = 0
-        sector_performance = {k: [] for k in sectors}
-        sector_performance['Others'] = []
-        
-        for idx, row in df.iterrows():
-            ticker = row['Ticker']
-            chg = row['Change %']
-            assigned = False
-            for s, tickers in sectors.items():
-                if ticker in tickers:
-                    sector_counts[s] += 1
-                    sector_performance[s].append(chg)
-                    assigned = True
-                    break
-            if not assigned:
-                sector_counts['Others'] += 1
-                sector_performance['Others'].append(chg)
-
-        # Create DataFrames for Charts
-        # Pie Chart Data (Distribution)
-        pie_data = pd.DataFrame([{'Sector': k, 'Count': v} for k, v in sector_counts.items() if v > 0])
-        if not pie_data.empty:
-            pie_data['Percent'] = ((pie_data['Count'] / pie_data['Count'].sum()) * 100).round(1)
-        
-        # Bar Chart Data (Performance)
-        bar_data = []
-        for s, changes in sector_performance.items():
-            if changes:
-                avg_chg = sum(changes) / len(changes)
-                bar_data.append({'Sector': s, 'Avg Change %': avg_chg})
-        bar_df = pd.DataFrame(bar_data)
-
-        # --- SECTOR INSIGHTS & METRICS ---
-        if not pie_data.empty and not bar_df.empty:
-            # 1. Determine Dominance & Top Performance
-            dominant_sector = pie_data.sort_values('Count', ascending=False).iloc[0]
-            top_sector = bar_df.sort_values('Avg Change %', ascending=False).iloc[0]
-            
-            # 2. AI Forecast Logic (Simple Heuristic Rule-Based)
-            forecast_text = ""
-            forecast_confidence = 0
-            
-            # Logic: If Top Sector is Layer 1 or Layer 2 -> Infrastructure Phase
-            if top_sector['Sector'] in ['Layer 1', 'Layer 2']:
-                forecast_text = "Rotasi modal sedang mengarah ke infrastruktur (Layer 1/2). Dalam 3 bulan ke depan, narasi akan berfokus pada **Ecosystem Growth & TVL Acc.**. Altcoin fundamental akan memimpin fase ini."
-                forecast_confidence = 85
-            # Logic: If Top Sector is Meme -> Speculative Phase
-            elif top_sector['Sector'] == 'Meme':
-                forecast_text = "Pasar dalam fase **High Risc / High Reward**. Dominasi Meme coin menandakan 'Risk-On' ekstrem. Hati-hati koreksi tajam. Dalam 3 bulan, kemungkinan profit akan dirotasi kembali ke sektor 'Real Yield' (DeFi/RWA)."
-                forecast_confidence = 78
-            # Logic: If Top Sector is AI -> Tech Phase
-            elif top_sector['Sector'] == 'AI & Big Data':
-                forecast_text = "Tren AI sedang memimpin. Narasi ini bersifat jangka panjang. Prediksi 3 bulan ke depan: **AI Supercycle** mungkin berlanjut seiring rilis teknologi baru, namun selektif pada proyek dengan produk nyata."
-                forecast_confidence = 92
-            # Logic: If Top Sector is RWA/DeFi -> Utility Phase
-            elif top_sector['Sector'] in ['RWA', 'DeFi']:
-                forecast_text = "Institusi mulai melirik Real World Asset (RWA). Ini adalah fase akumulasi 'Smart Money'. 3 Bulan ke depan berpotensi menjadi **RWA Summer**."
-                forecast_confidence = 88
-            else:
-                forecast_text = f"Sektor {top_sector['Sector']} memimpin kenaikan. Pasar mencari narasi baru. Pantau likuiditas BTC untuk konfirmasi arah selanjutnya."
-                forecast_confidence = 70
-
-            # UI: Metrics Display
-            m1, m2, m3 = st.columns(3)
-            with m1:
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
-                    <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">Dominasi Sektor</div>
-                    <div style="font-size:16px; font-weight:800; color:#fff;">{dominant_sector['Sector']}</div>
-                    <div style="font-size:11px; color:#848e9c;">{dominant_sector['Percent']}% dari total asset</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with m2:
-                is_pos = top_sector['Avg Change %'] >= 0
-                color = "#00c853" if is_pos else "#ff5252"
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
-                    <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">Top Performer (24h)</div>
-                    <div style="font-size:16px; font-weight:800; color:{color};">{top_sector['Sector']}</div>
-                    <div style="font-size:11px; color:{color};">{top_sector['Avg Change %']:+.2f}% Avg Change</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with m3:
-                st.markdown(f"""
-                <div style="background:rgba(41, 98, 255, 0.1); padding:10px; border-radius:6px; border:1px solid #2962ff;">
-                    <div style="font-size:10px; color:#848e9c; font-weight:700; text-transform:uppercase;">AI Forecast Confidence</div>
-                    <div style="font-size:16px; font-weight:800; color:#2962ff;">{forecast_confidence}%</div>
-                    <div style="font-size:11px; color:#848e9c;">Probability Score</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown("<div style='margin-bottom:15px'></div>", unsafe_allow_html=True)
-            
-            # Forecast Expander
-            with st.expander("🔮 AI Analisis & Prediksi Q3 (3 Bulan)", expanded=True):
-                st.markdown(f"""
-                <div style="border-left: 3px solid #2962ff; padding-left: 15px; margin: 5px 0;">
-                    <span style="font-size: 14px; color: #e0e0e0; font-weight: 500;">"{forecast_text}"</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-        # Charts Layout
-        # --- INTERACTIVE CHARTS & FILTERING (PLOTLY) ---
-        
-        c1, c2 = st.columns(2)
-        
-        # Captured Selections
-        filter_sector = None
-        
-        with c1:
-            st.caption("Distribution by Sector (Click to Filter)")
-            if not pie_data.empty:
-                # Plotly Pie (Donut)
-                fig_pie = px.pie(
-                    pie_data, 
-                    values='Count', 
-                    names='Sector', 
-                    hole=0.4,
-                    color='Sector',
-                    color_discrete_sequence=px.colors.sequential.Magma,
-                    height=350
-                )
-                fig_pie.update_traces(
-                    textposition='inside', 
-                    textinfo='percent+label',
-                    hovertemplate = "<b>%{label}</b><br>Count: %{value}<br>To: %{percent}<extra></extra>"
-                )
-                fig_pie.update_layout(
-                    showlegend=True,
-                    legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=0),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(t=20, b=20, l=0, r=0),
-                    font=dict(family="Orbitron", color="white")
-                )
-                
-                # Interactive Plotly Chart
-                event_pie = st.plotly_chart(fig_pie, use_container_width=True, on_select="rerun", selection_mode="points")
-            else:
-                st.info("No sector data available.")
-                event_pie = None
-                
-        with c2:
-            st.caption("Potential Performance by Sector (Click to Filter)")
-            if not bar_df.empty:
-                # 1. Sort Data High to Low
-                bar_df = bar_df.sort_values(by='Avg Change %', ascending=False)
-                
-                # Plotly Bar
-                # Add color column based on value
-                bar_df['Color'] = bar_df['Avg Change %'].apply(lambda x: '#00c853' if x > 0 else '#ff5252')
-                
-                fig_bar = px.bar(
-                    bar_df, 
-                    x='Sector', 
-                    y='Avg Change %',
-                    color='Avg Change %', # Gradient effect or just use discrete
-                    color_continuous_scale=['#ff5252', '#00c853'],
-                    text='Avg Change %', # Add text for labels
-                    height=350
-                )
-                # Force specific colors for clarity if preferred, but gradient is nice
-                # Using update_traces for precise control
-                fig_bar.update_traces(
-                    marker_color=bar_df['Color'],
-                    texttemplate='%{text:.2f}%', # Format displayed text
-                    textposition='outside', # Text outside bar
-                    hovertemplate = "<b>%{x}</b><br>Avg Change: %{y:.2f}%<extra></extra>"
-                )
-                fig_bar.update_layout(
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(t=30, b=20, l=20, r=20), # Increase top margin for text
-                    font=dict(family="Orbitron", color="white"),
-                    xaxis=dict(showgrid=False),
-                    yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-                    showlegend=False
-                )
-                
-                event_bar = st.plotly_chart(fig_bar, use_container_width=True, on_select="rerun", selection_mode="points")
-            else:
-                st.info("No performance data available.")
-                event_bar = None
-
-        # --- PROCESS SELECTION FILTER ---
-        
-        # Check selection from Pie
-        if event_pie and len(event_pie.selection["points"]) > 0:
-            # Plotly selection returns list of points. For pie, point_index corresponds to data row index?
-            # It returns dictionaries with point_index.
-            # However, for Pie Chart, 'point_index' usually maps to the input dataframe index if not sorted differently?
-            # Let's check 'point_index'
-            try:
-                # Get the first selected point
-                point = event_pie.selection["points"][0]
-                # In Plotly Express Pie, usually maps to row index of sorted data? 
-                # Safer: px.pie usually preserves order or we check custom_data?
-                # Let's try to map by point_index safe assumption for simple pie
-                idx = point["point_index"]
-                # Warning: Pie chart ordering might change data order. 
-                # But simple mapping:
-                filter_sector = pie_data.iloc[idx]['Sector']
-            except: pass
-            
-        # Check selection from Bar
-        if not filter_sector and event_bar and len(event_bar.selection["points"]) > 0:
-            try:
-                point = event_bar.selection["points"][0]
-                # Bar chart x-axis is usually category
-                # Plotly `selection` might contain 'x' value directly?
-                # Actually newer Streamlit returns the data directly if configured?
-                # selection['points'][0] keys: point_index, curve_number, ...
-                # It does NOT usually return x/y values in the point dict for `st.plotly_chart` specifically unless...
-                # Actually, relying on index is standard.
-                idx = point["point_index"]
-                filter_sector = bar_df.iloc[idx]['Sector']
-            except: pass
-
-        # Apply Filter
-        if filter_sector:
-            st.info(f"🔍 Memfilter Sektor: **{filter_sector}**")
-            
-            # Reset button
-            if st.button("Reset Filter", type="secondary"):
-                st.rerun() # Just rerun to clear selection state (native behavior clears usually or we force it)
-            
-            # Filtering logic
-            filtered_indices = []
-            for idx, row in df.iterrows():
-                ticker = row['Ticker']
-                # Check sector map
-                sector_match = "Others"
-                for s, tickers in sectors.items():
-                    if ticker in tickers:
-                        sector_match = s
-                        break
-                if sector_match == filter_sector:
-                    filtered_indices.append(idx)
-            
-            df = df.iloc[filtered_indices]
-
-        # --- NEW: RESULT SEARCH FILTER (WITH SUBMIT BUTTON) ---
-        st.markdown("### Filter Hasil")
-        
-        # Use form to prevent auto-filtering on every keystroke
-        with st.form(key="search_form", clear_on_submit=False):
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                result_search = st.text_input(
-                    "search_input",
-                    placeholder="Ketik kode crypto", 
-                    label_visibility="collapsed",
-                    key="search_query"
-                )
-            with col2:
-                search_submitted = st.form_submit_button("Cari", use_container_width=True)
-        
-        # Only filter if form is submitted or search query exists
-        if result_search and (search_submitted or result_search):
-            # Filter DataFrame
-            search_term = result_search.lower()
-            df = df[
-                df['Ticker'].str.lower().str.contains(search_term) | 
-                df['Status'].str.lower().str.contains(search_term) |
-                df['Analysis'].str.lower().str.contains(search_term)
-            ]
-            st.caption(f"Menampilkan {len(df)} hasil pencarian untuk '{result_search}'.")
-        
-        # Prepare filtered lists to get counts - ACCURATE MATH
-        # Prepare filtered lists to get counts - ACCURATE MATH
-        watchlist_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['WATCHLIST', 'CORE ASSET', 'UNDERVALUED'])]
-        exclusive_hot_list = [r for i, r in df.iterrows() if any(s in r['Status'] for s in ['ALPHA', 'WHALE', 'BREAKOUT', 'BULLISH', 'TRENDING', 'BUZZ'])]
-        
-        # All potential is everything that is not a simple 'HOLD'
-        all_potential_list = [r for i, r in df.iterrows() if r['Status'] != 'HOLD']
-        total_potential = len(all_potential_list)
-        
-        # Tabs for Result View - Using radio for persistence
-        result_tab_options = [
-            f"All ({total_potential})", 
-            f"Watchlist ({len(watchlist_list)})", 
-            f"Top Picks ({len(exclusive_hot_list)})"
-        ]
-        
-        # Sync current tab with potentially new labels
-        if 'active_result_tab' not in st.session_state:
-            st.session_state.active_result_tab = result_tab_options[0]
-        else:
-            # Try to keep the same tab category even if count changes
-            current_category = st.session_state.active_result_tab.split(' (')[0]
-            if current_category == "All Potential": current_category = "All"
-            new_tab_match = [opt for opt in result_tab_options if opt.startswith(current_category)]
-            if new_tab_match:
-                st.session_state.active_result_tab = new_tab_match[0]
-            else:
-                st.session_state.active_result_tab = result_tab_options[0]
-
-        # Tab selector with radio buttons
-        st.markdown("---")
-        active_tab = st.radio(
-            "Pilih Tampilan:",
-            result_tab_options,
-            horizontal=True,
-            key="active_result_tab",
-            label_visibility="collapsed"
-        )
-        
-        def render_crypto_grid(rows, key_prefix):
-            if not rows:
-                st.info("Belum ada asset yang memenuhi kriteria ini.")
-                return
-            
-            cols = st.columns(3)
-            for idx, row in enumerate(rows):
-                with cols[idx % 3]:
-                    # Add unique ID for anchor navigation
-                    st.markdown(f'<div id="card-{row["Ticker"]}"></div>', unsafe_allow_html=True)
-                    
-                    ticker_clean = row['Ticker']
-                    coin_data = COIN_MAP.get(ticker_clean, {})
-                    logo_url = coin_data.get('image', '')
-                    
-                    with st.container(border=True):
-                        # 1. Header: Ticker & Price
-                        h_col1, h_col2 = st.columns([2, 1])
-                        with h_col1:
-                            st.markdown(f"""
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <div style="width:24px; height:24px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.05);">
-                                        <img src="{logo_url}" style="width:100%; height:100%; object-fit:contain;">
-                                    </div>
-                                    <div>
-                                        <div style="font-weight: 700; font-size: 14px; color: #e0e0e0; line-height: 1;">{ticker_clean}</div>
-                                        <div style="font-size: 10px; color: #848e9c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">{row.get('Name', '')}</div>
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-                            st.markdown(f"<span style='font-size: 18px; font-weight: 800; color: #fff;'>{format_price(row['Price'])}</span>", unsafe_allow_html=True)
-                        with h_col2:
-                            st.markdown(f"<div style='text-align: right; font-size: 11px; font-weight: 700; color: #848e9c; margin-top: 5px;'>{row['Status']}</div>", unsafe_allow_html=True)
-
-                        # 2. Key Metrics Card
-                        st.markdown(f"""
-                            <div class="metrics-grid">
-                                <div class="metric-item">
-                                    <span class="metric-label">24h Chg</span>
-                                    <span class="metric-value">{row['Change %']:.2f}%</span>
-                                </div>
-                                <div class="metric-item">
-                                    <span class="metric-label">Mkt Cap</span>
-                                    <span class="metric-value">{format_mcap(coin_data.get('market_cap', 0))}</span>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-
-                        # 3. Pulse Indicators (Text Only)
-                        st.markdown(f"""
-                            <div style="display: flex; gap: 15px; margin-top: 10px; margin-bottom: 5px;">
-                                <div style="font-size: 10px; color: #848e9c;">MEDIA PULSE: <span style="color:#00c853;">{row['News Score']}%</span></div>
-                                <div style="font-size: 10px; color: #848e9c;">SOCIAL BUZZ: <span style="color:#2962ff;">{row['Social Buzz']}%</span></div>
-                            </div>
-                        """, unsafe_allow_html=True)
-
-                        # 4. Summary & Progressive Disclosure
-                        analysis_title = row['Analysis'].split('\n')[0] if row['Analysis'] else "Analysis"
-                        st.markdown(f"<div style='margin-top: 15px; font-weight: 700; color: #e0e0e0;'>{analysis_title}</div>", unsafe_allow_html=True)
-                        
-                        with st.expander("Detail Riset & Berita"):
-                            # The full detailed bullet points
-                            st.markdown(row['Analysis'])
-                            st.markdown("---")
-                            if row['News List']:
-                                for news in row['News List']:
-                                    news_url = news.get('link', '#')
-                                    st.markdown(f"""
-                                        <div class="news-card" style="margin-bottom: 12px; border-left: 4px solid #ff2d75; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden;">
-                                            <a href="{news_url}" target="_blank" style="text-decoration: none !important; text-decoration-line: none !important; color: inherit !important; display: block; padding: 12px; border: none !important;">
-                                                <div style="font-size: 10px; color: #848e9c; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; display: flex; justify-content: space-between;">
-                                                    <span style="display: flex; align-items: center; gap: 4px;">🗓️ {news.get('date')}</span>
-                                                    <span style="display: flex; align-items: center; gap: 4px;">🌐 {news.get('source')}</span>
-                                                </div>
-                                                <div style="color: #ff2d75; font-weight: 700; font-size: 14px; line-height: 1.4; margin-bottom: 5px; text-decoration: none !important;">
-                                                    {news.get('title')}
-                                                </div>
-                                                <div style="font-size: 9px; color: #848e9c; font-style: italic; text-decoration: none !important;">Klik untuk baca selengkapnya di sumber asli &rarr;</div>
-                                            </a>
-                                        </div>
-                                    """, unsafe_allow_html=True)
-                            else: st.caption("Tidak ada berita spesifik hari ini.")
-                        
-                        st.button(f"Load Chart", key=f"btn_{key_prefix}_{row['Ticker']}_{idx}", on_click=set_ticker, args=(row['Ticker'],), use_container_width=True)
-
-
-        # Render content based on active tab
-        if active_tab.startswith("All"):
-            render_crypto_grid(all_potential_list, "all")
-            
-            # --- PROFESSIONAL TABLE UX IN ALL TAB ---
-            st.markdown("---")
-            st.markdown("###  Tabel Detail Semua Asset")
-            st.markdown("""
-            <style>
-                /* Dataframe header styling */
-                [data-testid="stDataFrameResizable"] th {
-                    background-color: #2a2e39 !important;
-                    color: #848e9c !important;
-                }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.dataframe(
-                df[df['Status'] != 'HOLD'], 
-                use_container_width=True,
-                column_order=["Ticker", "Status", "Price", "Change %", "Raw Vol Ratio", "News Score", "Social Buzz", "Headline"],
-                column_config={
-                    "Ticker": st.column_config.TextColumn(
-                        "Ticker", 
-                        width="small",
-                        help="Kode Crypto Asset"
-                    ),
-                    "Status": st.column_config.TextColumn(
-                        "Signal Status", 
-                        width="medium",
-                        help="Hasil Analisis Algoritma"
-                    ),
-                    "Price": st.column_config.NumberColumn(
-                        "Price (USD)", 
-                        format="$ %.2f",
-                        help="Harga Terakhir"
-                    ),
-                    "Change %": st.column_config.NumberColumn(
-                        "Change", 
-                        format="%.2f%%",
-                        help="Perubahan Harian"
-                    ),
-                    "Raw Vol Ratio": st.column_config.NumberColumn(
-                        "Vol Ratio", 
-                        format="%.1fx",
-                        help="Rasio Volume vs Rata-rata 20 Hari"
-                    ),
-                    "News Score": st.column_config.ProgressColumn(
-                        "Media Sentiment", 
-                        min_value=0, 
-                        max_value=100, 
-                        format="%d",
-                        help="Sentimen Berita (0-100)"
-                    ),
-                    "Social Buzz": st.column_config.ProgressColumn(
-                        "Social Buzz", 
-                        min_value=0, 
-                        max_value=100, 
-                        format="%d",
-                        help="Intensitas Pembicaraan Publik (0-100)"
-                    ),
-                    "Headline": st.column_config.TextColumn(
-                        "Latest News", 
-                        width="large"
-                    ),
-                },
-                hide_index=True,
-                height=600
-            )
-
-        elif active_tab.startswith("Watchlist"):
-            render_crypto_grid(watchlist_list, "watchlist")
-
-        elif active_tab.startswith("Top Picks"):
-            render_crypto_grid(exclusive_hot_list, "picks")
-
 elif main_active_tab == "Asset Stats":
     st.markdown("## Statistik Asset")
     st.markdown("---")
