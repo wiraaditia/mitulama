@@ -313,11 +313,11 @@ def render_market_analysis(df):
             )
             fig_pie.update_layout(
                 showlegend=True,
-                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=0),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5), # Legend pushed further down
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(t=20, b=20, l=0, r=0),
-                font=dict(family="Orbitron", color="white")
+                margin=dict(t=20, b=120, l=10, r=10), # Much larger bottom margin to prevent cutoff
+                font=dict(family="Orbitron", color="white", size=14)
             )
             
             # Interactive Plotly Chart
@@ -356,9 +356,9 @@ def render_market_analysis(df):
             fig_bar.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(t=30, b=20, l=20, r=20), # Increase top margin for text
-                font=dict(family="Orbitron", color="white"),
-                xaxis=dict(showgrid=False),
+                margin=dict(t=40, b=60, l=20, r=20), # Increase margins
+                font=dict(family="Orbitron", color="white", size=14), # Larger font
+                xaxis=dict(showgrid=False, tickangle=-45), # Rotate labels explicitly
                 yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
                 showlegend=False
             )
@@ -1257,14 +1257,17 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Action Bar: Search & Refresh
-    s_col = st.columns(2)
+    # Action Bar: Filter Input & Refresh
+    s_col = st.columns([3, 1])
     with s_col[0]:
-        if st.button("Search", help="Cari Crypto", use_container_width=True):
-            st.session_state.show_search = not st.session_state.show_search
-            st.rerun()
+        filter_query = st.text_input(
+            "Filter", 
+            placeholder="Search", 
+            label_visibility="collapsed",
+            key="sidebar_filter"
+        ).upper()
     with s_col[1]:
-        if st.button("Refresh", use_container_width=True, type="secondary"):
+        if st.button("↻", help="Refresh Data", use_container_width=True, type="secondary"):
             # Don't clear global cache, only news/analysis
             get_news_sentiment.clear()
             get_crypto_stats.clear()
@@ -1275,21 +1278,7 @@ with st.sidebar:
             st.session_state.refresh_market = True 
             st.rerun()
 
-    # Search Input (Conditional)
-    if st.session_state.show_search:
-        search_ticker = st.selectbox(
-            "Cari Kode Crypto:",
-            options=TICKERS,
-            index=None,
-            placeholder="Cari",
-            label_visibility="collapsed"
-        )
-        if search_ticker:
-            set_ticker(search_ticker)
-            st.session_state.show_search = False
-            st.rerun()
-    
-    st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
     
     # Tabs for Watchlist / Gainer / Loser
     tab_wl, tab_gainer, tab_loser = st.tabs(["Watchlist", "Gainer", "Loser"])
@@ -1368,9 +1357,23 @@ with st.sidebar:
         </svg>
         '''
 
+    # Apply Filter to Main List
+    final_watchlist = st.session_state.watchlist_data_list
+    if filter_query:
+        final_watchlist = [
+            item for item in final_watchlist 
+            if filter_query in item['ticker'].upper() or filter_query in item['name'].upper()
+        ]
+
     # Render Loop - Watchlist Tab
     with tab_wl:
-        for item in st.session_state.watchlist_data_list[:st.session_state.watchlist_limit]:
+        # If filtering, show all results. If not, respect limit.
+        display_list = final_watchlist if filter_query else final_watchlist[:st.session_state.watchlist_limit]
+        
+        if not display_list:
+            st.caption("No assets found.")
+            
+        for item in display_list:
             # Fallback for 'id' to fix KeyError
             coin_id = item.get('id', item['ticker'])
             # Layout: [Logo] [Ticker/Name] [Sparkline] [Price/Chg]
@@ -1422,13 +1425,13 @@ with st.sidebar:
             
             st.markdown("<div style='margin-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,0.03);'></div>", unsafe_allow_html=True)
         
-        # Load More Button
-        if len(st.session_state.watchlist_data_list) > st.session_state.watchlist_limit:
+        # Load More Button (Only if NOT filtering)
+        if not filter_query and len(final_watchlist) > st.session_state.watchlist_limit:
             if st.button("Load More", use_container_width=True):
                 st.session_state.watchlist_limit += 20
                 st.rerun()
         
-        st.caption(f"Showing {min(st.session_state.watchlist_limit, len(st.session_state.watchlist_data_list))} of {len(st.session_state.watchlist_data_list)} assets")
+        st.caption(f"Showing {len(display_list)} of {len(final_watchlist)} assets")
         # Integrasi Global Stats di sidebar
         if 'market_stats_live' in st.session_state and st.session_state.market_stats_live:
             stats = st.session_state.market_stats_live
@@ -1439,8 +1442,17 @@ with st.sidebar:
     
     with tab_gainer:
         # Filter out items with None in 'chg' and sort
-        items_with_chg = [i for i in st.session_state.watchlist_data_list if i.get('chg') is not None and i.get('chg') > 0]
-        gainers = sorted(items_with_chg, key=lambda x: x['chg'], reverse=True)[:10]
+        items_with_chg = [i for i in final_watchlist if i.get('chg') is not None and i.get('chg') > 0]
+        # Sort logic: if filtering, maybe just show all valid gainers filtered? 
+        # But 'final_watchlist' is already filtered. So just sort.
+        gainers = sorted(items_with_chg, key=lambda x: x['chg'], reverse=True)
+        # Limit to 10 only if NOT filtering
+        if not filter_query:
+            gainers = gainers[:10]
+            
+        if not gainers:
+             st.info("No data")
+
         for item in gainers:
             coin_id = item.get('id', item['ticker'])
             r_col1, r_col2, r_col3, r_col4 = st.columns([1.3, 3.5, 2.2, 4.5])
@@ -1475,8 +1487,11 @@ with st.sidebar:
     
     # Loser Tab
     with tab_loser:
-        items_with_chg_loser = [i for i in st.session_state.watchlist_data_list if i.get('chg') is not None]
-        losers = sorted(items_with_chg_loser, key=lambda x: x['chg'])[:10]
+        items_with_chg_loser = [i for i in final_watchlist if i.get('chg') is not None]
+        losers = sorted(items_with_chg_loser, key=lambda x: x['chg'])
+        if not filter_query:
+            losers = losers[:10]
+            
         if not losers:
             st.info("No data available")
         for item in losers:
