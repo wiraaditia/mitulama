@@ -15,13 +15,15 @@ def get_market_data():
         # Simple Sector Inference (Hardcoded for top coins for MVP)
         # In a real app we'd use the categories endpoint or tags
         sectors = {
-            'Layer 1': ['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'TRX', 'NEAR', 'KAS', 'SUI', 'SEI', 'APT', 'ALGO', 'HBAR', 'XRP', 'BNB'],
-            'DeFi': ['UNI', 'LINK', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'RUNE', 'INJ', 'JUP', 'DYDX', 'LDO'],
-            'AI & Big Data': ['TAO', 'FET', 'RNDR', 'NEAR', 'GRT', 'AGIX', 'WLD', 'OCEAN', 'JASMY', 'AKT'],
-            'Meme': ['DOGE', 'SHIB', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME', 'BOME', 'BRETT', 'MOG'],
-            'Gaming/Metaverse': ['ICP', 'IMX', 'SAND', 'MANA', 'AXS', 'GALA', 'BEAM', 'RON'],
-            'Layer 2': ['MATIC', 'ARB', 'OP', 'MNT', 'STRK', 'BLAST', 'BASE'],
-            'RWA': ['ONDO', 'POLYX', 'PENDLE']
+            'Layer 1': ['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'TRX', 'NEAR', 'KAS', 'SUI', 'SEI', 'APT', 'ALGO', 'HBAR', 'XRP', 'BNB', 'LTC', 'BCH', 'ETC', 'XLM', 'VET', 'ICP', 'TON', 'STX', 'EGLD', 'KAVA', 'MINA'],
+            'Layer 2': ['MATIC', 'ARB', 'OP', 'MNT', 'STRK', 'BLAST', 'BASE', 'METIS', 'LRC', 'IMX', 'POL', 'RIVER', 'ZKSYNC', 'TAIKO', 'SCR'],
+            'DeFi': ['UNI', 'LINK', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'RUNE', 'INJ', 'JUP', 'DYDX', 'LDO', 'PENDLE', 'EIGEN', 'RAY', 'ORCA', 'CAKE', 'COW', 'DRIFT'],
+            'AI & Big Data': ['TAO', 'FET', 'RNDR', 'NEAR', 'GRT', 'WLD', 'JASMY', 'AKT', 'AR', 'FIL', 'THETA', 'GLM', 'LPT', 'IO', 'ARKM', 'TURBO'],
+            'Meme': ['DOGE', 'SHIB', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME', 'BOME', 'BRETT', 'MOG', 'POPCAT', 'NEIRO', 'PEOPLE', 'MYRO', 'COQ'],
+            'Exchange': ['BNB', 'OKB', 'LEO', 'CRO', 'KCS', 'BGB', 'GT', 'HT', 'KRRX', 'WOO'],
+            'RWA': ['ONDO', 'POLYX', 'PENDLE', 'CHNG', 'TRU', 'CFG', 'OM', 'RSR', 'MPG'],
+            'Gaming/Metaverse': ['IMX', 'SAND', 'MANA', 'AXS', 'GALA', 'BEAM', 'RON', 'PRIME', 'ILV', 'BIGTIME', 'ALICE', 'YGG'],
+            'Infrastructure': ['LINK', 'TIA', 'PYTH', 'STX', 'ENS', 'ANKR', 'GAL', 'DUSK', 'EIGEN', 'ZRO', 'AXL', 'GEL']
         }
         
         sector_performance = {k: [] for k in sectors}
