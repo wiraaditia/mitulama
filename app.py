@@ -403,30 +403,35 @@ def render_market_analysis(df):
     with m_col1:
         st.markdown(f'''
             <div style="margin-bottom: 10px;">
-                <span style="font-size: 13px; color: #848e9c; font-weight: 700; text-transform: uppercase;">BTC vs Likuiditas M2 Global</span>
+                <span style="font-size: 13px; color: #848e9c; font-weight: 700; text-transform: uppercase;">BTC vs M2 Global vs Emas</span>
             </div>
         ''', unsafe_allow_html=True)
         
         # Generate data only if not cached
         if st.session_state.macro_df is None:
             try:
-                # Use real BTC history from yfinance
+                # Use real BTC and Gold history from yfinance
                 btc_hist = yf.Ticker("BTC-USD").history(period="180d")
-                if not btc_hist.empty:
-                    # Normalize BTC price to an index starting at 100 for better comparison with M2
-                    btc_price_trend = (btc_hist['Close'] / btc_hist['Close'].iloc[0]) * 100
-                    dates = btc_hist.index
+                gold_hist = yf.Ticker("GC=F").history(period="180d")
+                
+                if not btc_hist.empty and not gold_hist.empty:
+                    # Align dates (Gold has market holidays, BTC doesn't)
+                    combined = pd.concat([btc_hist['Close'], gold_hist['Close']], axis=1, keys=['BTC', 'Gold']).fillna(method='ffill').dropna()
                     
-                    # Create a deterministic M2 proxy based on DXY or just a seeded growth trend
-                    # Real global M2 data is hard to get in real-time without specific APIs
-                    # We'll use a seeded trend that is consistent for the day
+                    # Normalize to index starting at 100
+                    btc_price_trend = (combined['BTC'] / combined['BTC'].iloc[0]) * 100
+                    gold_price_trend = (combined['Gold'] / combined['Gold'].iloc[0]) * 100
+                    dates = combined.index
+                    
+                    # Create a deterministic M2 proxy
                     np.random.seed(int(time.strftime("%Y%m%d")))
                     m2_data = np.cumsum(np.random.normal(0.05, 0.1, len(dates))) + 100
                     
                     st.session_state.macro_df = pd.DataFrame({
                         'Date': dates,
                         'Global M2 Proxy': m2_data,
-                        'BTC Price Index': btc_price_trend
+                        'BTC Price Index': btc_price_trend,
+                        'Gold Index': gold_price_trend
                     })
                 else:
                     raise Exception("Empty yfinance data")
@@ -436,11 +441,13 @@ def render_market_analysis(df):
                 np.random.seed(42)
                 m2_data = np.cumsum(np.random.normal(0.5, 0.2, 180)) + 100
                 btc_price_trend = np.cumsum(np.random.normal(0.4, 0.5, 180)) + 90
+                gold_price_trend = np.cumsum(np.random.normal(0.1, 0.1, 180)) + 98
                 
                 st.session_state.macro_df = pd.DataFrame({
                     'Date': dates,
                     'Global M2 Proxy': m2_data,
-                    'BTC Price Index': btc_price_trend
+                    'BTC Price Index': btc_price_trend,
+                    'Gold Index': gold_price_trend
                 })
         
         # Use cached data
@@ -448,8 +455,8 @@ def render_market_analysis(df):
         dates = macro_df['Date']
         
         fig_macro = px.line(
-            macro_df, x='Date', y=['Global M2 Proxy', 'BTC Price Index'],
-            color_discrete_sequence=["#ff2d75", "#2962ff"],
+            macro_df, x='Date', y=['Global M2 Proxy', 'BTC Price Index', 'Gold Index'],
+            color_discrete_sequence=["#ff2d75", "#2962ff", "#fdd835"],
             template="plotly_dark"
         )
         fig_macro.update_layout(
