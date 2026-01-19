@@ -375,6 +375,16 @@ def render_market_analysis(df):
     st.markdown("---")
     st.markdown("### BTC MACRO ANALYSIS & LIQUIDITY PULSE")
     
+    # Initialize session state for chart data consistency
+    if 'macro_df' not in st.session_state:
+        st.session_state.macro_df = None
+    if 'forecast_data' not in st.session_state:
+        st.session_state.forecast_data = {}
+    if 'flow_df' not in st.session_state:
+        st.session_state.flow_df = None
+    if 'whale_metrics' not in st.session_state:
+        st.session_state.whale_metrics = None
+    
     # NEW: Forecast Horizon Selector
     f_col1, f_col2 = st.columns([1, 2])
     with f_col1:
@@ -384,6 +394,13 @@ def render_market_analysis(df):
             horizontal=True,
             key="forecast_horizon"
         )
+    with f_col2:
+        if st.button("🔄 Refresh Data", help="Generate ulang data chart"):
+            st.session_state.macro_df = None
+            st.session_state.forecast_data = {}
+            st.session_state.flow_df = None
+            st.session_state.whale_metrics = None
+            st.rerun()
     
     m_col1, m_col2 = st.columns(2)
     
@@ -393,18 +410,25 @@ def render_market_analysis(df):
                 <span style="font-size: 13px; color: #848e9c; font-weight: 700; text-transform: uppercase;">BTC vs Likuiditas M2 Global</span>
             </div>
         ''', unsafe_allow_html=True)
-        # Generating mock historical data for correlation (Expanded to 180 days)
-        dates = pd.date_range(end=datetime.now(), periods=180, freq='D')
         
-        # M2 is a proxy for global liquidity (often leads BTC)
-        m2_data = np.cumsum(np.random.normal(0.5, 0.2, 180)) + 100
-        btc_price_trend = np.cumsum(np.random.normal(0.4, 0.5, 180)) + 90
+        # Generate data only if not cached
+        if st.session_state.macro_df is None:
+            # Generating mock historical data for correlation (Expanded to 180 days)
+            dates = pd.date_range(end=datetime.now(), periods=180, freq='D')
+            
+            # M2 is a proxy for global liquidity (often leads BTC)
+            m2_data = np.cumsum(np.random.normal(0.5, 0.2, 180)) + 100
+            btc_price_trend = np.cumsum(np.random.normal(0.4, 0.5, 180)) + 90
+            
+            st.session_state.macro_df = pd.DataFrame({
+                'Date': dates,
+                'Global M2 Proxy': m2_data,
+                'BTC Price Index': btc_price_trend
+            })
         
-        macro_df = pd.DataFrame({
-            'Date': dates,
-            'Global M2 Proxy': m2_data,
-            'BTC Price Index': btc_price_trend
-        })
+        # Use cached data
+        macro_df = st.session_state.macro_df
+        dates = macro_df['Date']
         
         fig_macro = px.line(
             macro_df, x='Date', y=['Global M2 Proxy', 'BTC Price Index'],
@@ -417,7 +441,7 @@ def render_market_analysis(df):
             margin=dict(t=10, b=10, l=10, r=10),
             height=300,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            xaxis=dict(showgrid=False, range=[dates[-30], dates[-1]]),
+            xaxis=dict(showgrid=False, range=[dates.iloc[-30], dates.iloc[-1]]),
             yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
         )
         st.plotly_chart(fig_macro, use_container_width=True)
@@ -430,35 +454,52 @@ def render_market_analysis(df):
             </div>
         ''', unsafe_allow_html=True)
         
-        # Forecast Logic based on selection
-        btc_data = COIN_MAP.get('BTC', {})
-        btc_price = btc_data.get('current_price', 90000)
-        
-        if "Harian" in horizon:
-            freq = 'D'
-            periods = 30
-            volatility = 0.02
-            trend = 0.001
-        elif "Bulanan" in horizon:
-            freq = 'ME'
-            periods = 12
-            volatility = 0.12
-            trend = 0.05
-        else: # Tahunan
-            freq = 'YE'
-            periods = 3
-            volatility = 0.40
-            trend = 0.50
+        # Generate forecast data only if not cached for this horizon
+        if horizon not in st.session_state.forecast_data:
+            # Forecast Logic based on selection
+            btc_data = COIN_MAP.get('BTC', {})
+            btc_price = btc_data.get('current_price', 90000)
             
-        future_dates = pd.date_range(start=datetime.now(), periods=periods, freq=freq)
+            if "Harian" in horizon:
+                freq = 'D'
+                periods = 30
+                volatility = 0.02
+                trend = 0.001
+            elif "Bulanan" in horizon:
+                freq = 'ME'
+                periods = 12
+                volatility = 0.12
+                trend = 0.05
+            else: # Tahunan
+                freq = 'YE'
+                periods = 3
+                volatility = 0.40
+                trend = 0.50
+                
+            future_dates = pd.date_range(start=datetime.now(), periods=periods, freq=freq)
+            
+            # Base the trend on BTC's 24h change for a tiny bit of realism
+            local_trend = trend + (btc_data.get('price_change_percentage_24h', 0) / 1000)
+            
+            projection = [btc_price]
+            for i in range(periods - 1):
+                noise = np.random.normal(local_trend, volatility)
+                projection.append(projection[-1] * (1 + noise))
+            
+            # Store in session state
+            st.session_state.forecast_data[horizon] = {
+                'dates': future_dates,
+                'projection': projection,
+                'volatility': volatility,
+                'btc_price_change': btc_data.get('price_change_percentage_24h', 0)
+            }
         
-        # Base the trend on BTC's 24h change for a tiny bit of realism
-        local_trend = trend + (btc_data.get('price_change_percentage_24h', 0) / 1000)
-        
-        projection = [btc_price]
-        for i in range(periods - 1):
-            noise = np.random.normal(local_trend, volatility)
-            projection.append(projection[-1] * (1 + noise))
+        # Use cached data
+        cached = st.session_state.forecast_data[horizon]
+        future_dates = cached['dates']
+        projection = cached['projection']
+        volatility = cached['volatility']
+        btc_price_change = cached['btc_price_change']
         
         forecast_df = pd.DataFrame({
             'Date': future_dates,
@@ -497,7 +538,7 @@ def render_market_analysis(df):
         st.markdown(f"""
         <div style="background: rgba(255, 45, 117, 0.05); padding: 10px; border-radius: 6px; border: 1px solid var(--border-pink);">
             <div style="font-size: 11px; color: #ff80ab; font-weight: 700;">AI FORECAST ENGINE</div>
-            <div style="font-size: 13px; color: #fff; margin-top: 5px;">Prediksi didasarkan pada korelasi M2, Sentiment News ({btc_data.get('price_change_percentage_24h', 0):+.1f}%), dan Analisis On-chain.</div>
+            <div style="font-size: 13px; color: #fff; margin-top: 5px;">Prediksi didasarkan pada korelasi M2, Sentiment News ({btc_price_change:+.1f}%), dan Analisis On-chain.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -514,25 +555,31 @@ def render_market_analysis(df):
             </div>
         ''', unsafe_allow_html=True)
         
-        # Simulate Flow Data based on real volume and price change (Expanded to 60 days)
-        # Logic: If price is up on high volume, it's likely net inflow to cold storage (Bullish) or net buying.
-        # If price is down on high volume, it's net outflow from wallets to exchanges (Bearish).
-        
-        flow_days = pd.date_range(end=datetime.now(), periods=60, freq='D')
-        
-        # Calculate a pseudo-flow score
-        net_flow = []
-        for i in range(60):
-            daily_change = np.random.normal(0, 2)
-            daily_vol_weight = np.random.uniform(0.5, 2.0)
-            # Flow: Price Change * Volume Weight + Random Noise
-            flow = daily_change * daily_vol_weight + np.random.normal(0, 5)
-            net_flow.append(flow)
+        # Generate flow data only if not cached
+        if st.session_state.flow_df is None:
+            # Simulate Flow Data based on real volume and price change (Expanded to 60 days)
+            # Logic: If price is up on high volume, it's likely net inflow to cold storage (Bullish) or net buying.
+            # If price is down on high volume, it's net outflow from wallets to exchanges (Bearish).
             
-        flow_df = pd.DataFrame({
-            'Date': flow_days,
-            'Net Flow (M)': net_flow
-        })
+            flow_days = pd.date_range(end=datetime.now(), periods=60, freq='D')
+            
+            # Calculate a pseudo-flow score
+            net_flow = []
+            for i in range(60):
+                daily_change = np.random.normal(0, 2)
+                daily_vol_weight = np.random.uniform(0.5, 2.0)
+                # Flow: Price Change * Volume Weight + Random Noise
+                flow = daily_change * daily_vol_weight + np.random.normal(0, 5)
+                net_flow.append(flow)
+            
+            st.session_state.flow_df = pd.DataFrame({
+                'Date': flow_days,
+                'Net Flow (M)': net_flow
+            })
+        
+        # Use cached data
+        flow_df = st.session_state.flow_df
+        flow_days = flow_df['Date']
         
         # Color bars based on inflow/outflow
         flow_df['Color'] = flow_df['Net Flow (M)'].apply(lambda x: '#00c853' if x > 0 else '#ff5252')
@@ -547,7 +594,7 @@ def render_market_analysis(df):
             plot_bgcolor='rgba(0,0,0,0)',
             margin=dict(t=10, b=10, l=10, r=10),
             height=250,
-            xaxis=dict(showgrid=False, title="Tanggal", range=[flow_days[-14], flow_days[-1]]),
+            xaxis=dict(showgrid=False, title="Tanggal", range=[flow_days.iloc[-14], flow_days.iloc[-1]]),
             yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', title="Jumlah ($M)")
         )
         st.plotly_chart(fig_flow, use_container_width=True)
@@ -559,10 +606,18 @@ def render_market_analysis(df):
             </div>
         ''', unsafe_allow_html=True)
         
-        # Metrics for Whale Activity
-        whale_accumulation = random.randint(65, 95)
-        exchange_balance_change = random.uniform(-2.5, 1.5)
-        large_tx_count = random.randint(120, 500)
+        # Generate whale metrics only if not cached
+        if st.session_state.whale_metrics is None:
+            st.session_state.whale_metrics = {
+                'whale_accumulation': random.randint(65, 95),
+                'exchange_balance_change': random.uniform(-2.5, 1.5),
+                'large_tx_count': random.randint(120, 500)
+            }
+        
+        # Use cached metrics
+        whale_accumulation = st.session_state.whale_metrics['whale_accumulation']
+        exchange_balance_change = st.session_state.whale_metrics['exchange_balance_change']
+        large_tx_count = st.session_state.whale_metrics['large_tx_count']
         
         st.markdown(f'''
             <div style="background: rgba(0, 200, 83, 0.05); border-left: 3px solid #00c853; padding: 15px; border-radius: 4px; margin-bottom: 10px;">
@@ -1107,11 +1162,58 @@ def get_news_sentiment(ticker):
     Returns: sentiment, headline, news_score, social_buzz, impact, news_list, analysis
     """
     try:
-        clean_ticker = ticker.replace('.JK', '')
+        clean_ticker = ticker.replace('.JK', '').upper()
         
-        # Multi-source news aggregation
+        # Coin name mapping untuk meningkatkan relevansi pencarian
+        coin_names = {
+            'BTC': 'bitcoin',
+            'ETH': 'ethereum',
+            'SHIB': 'shiba inu',
+            'DOGE': 'dogecoin',
+            'SOL': 'solana',
+            'ADA': 'cardano',
+            'XRP': 'ripple',
+            'BNB': 'binance coin',
+            'AVAX': 'avalanche',
+            'MATIC': 'polygon',
+            'DOT': 'polkadot',
+            'LINK': 'chainlink',
+            'UNI': 'uniswap',
+            'ATOM': 'cosmos',
+            'LTC': 'litecoin',
+            'BCH': 'bitcoin cash',
+            'NEAR': 'near protocol',
+            'APT': 'aptos',
+            'ARB': 'arbitrum',
+            'OP': 'optimism',
+            'FIL': 'filecoin',
+            'PEPE': 'pepe',
+            'WIF': 'dogwifhat',
+            'BONK': 'bonk',
+            'FLOKI': 'floki',
+            'LUNC': 'terra luna classic',
+            'ALGO': 'algorand',
+            'VET': 'vechain',
+            'ICP': 'internet computer',
+            'TRX': 'tron',
+            'ETC': 'ethereum classic',
+            'XLM': 'stellar',
+            'HBAR': 'hedera',
+            'QNT': 'quant',
+            'AAVE': 'aave',
+            'MKR': 'maker',
+            'SNX': 'synthetix',
+            'CRV': 'curve',
+            'SUSHI': 'sushiswap',
+            'COMP': 'compound',
+            'YFI': 'yearn finance'
+        }
+        
+        coin_name = coin_names.get(clean_ticker, clean_ticker.lower())
+        
+        # Multi-source news aggregation dengan query yang lebih spesifik
         sources = [
-            f"https://news.google.com/rss/search?q={clean_ticker}+crypto+news&hl=en-US&gl=US&ceid=US:en",
+            f"https://news.google.com/rss/search?q={clean_ticker}+OR+\"{coin_name}\"+crypto&hl=en-US&gl=US&ceid=US:en",
             f"https://cryptopanic.com/news/rss/?filter=all&q={clean_ticker}"
         ]
         
@@ -1125,7 +1227,7 @@ def get_news_sentiment(ticker):
                 headers = {'User-Agent': random.choice(USER_AGENTS)}
                 res = requests.get(rss_url, headers=headers, timeout=5)
                 soup = BeautifulSoup(res.text, 'xml') 
-                items = soup.find_all('item', limit=8)
+                items = soup.find_all('item', limit=10)
                 
                 for item in items:
                     try:
@@ -1151,13 +1253,29 @@ def get_news_sentiment(ticker):
                         if not title_clean or len(title_clean) < 20: continue
                         if any(n in title_clean.lower() for n in noise_keywords): continue
                         
-                        # Relevance validation
+                        # STRICT RELEVANCE VALIDATION
                         title_lower = title_clean.lower()
-                        ticker_match = clean_ticker.lower() in title_lower
-                        crypto_keywords = ['crypto', 'bitcoin', 'token', 'price', 'market', 'trading', 'web3', 'defi']
-                        has_context = any(kw in title_lower for kw in crypto_keywords)
                         
-                        if not (ticker_match or has_context): continue
+                        # Check if ticker or coin name is mentioned
+                        ticker_match = clean_ticker.lower() in title_lower
+                        name_match = coin_name.lower() in title_lower
+                        
+                        # Berita HARUS mengandung ticker ATAU nama coin
+                        # Tidak lagi menerima berita hanya karena mengandung kata "crypto" atau "bitcoin"
+                        if not (ticker_match or name_match):
+                            continue
+                        
+                        # Additional filter: Exclude news about other major coins if searching for altcoins
+                        if clean_ticker not in ['BTC', 'ETH']:
+                            # Jika mencari altcoin, exclude berita yang lebih fokus ke BTC/ETH
+                            other_major_coins = ['bitcoin', 'ethereum', 'btc', 'eth']
+                            # Count mentions of other coins vs target coin
+                            other_mentions = sum(1 for coin in other_major_coins if coin in title_lower)
+                            target_mentions = (1 if ticker_match else 0) + (1 if name_match else 0)
+                            
+                            # Skip if berita lebih banyak mention coin lain
+                            if other_mentions > target_mentions:
+                                continue
                         
                         if any(k in title_lower for k in social_keywords):
                             social_hits += 1
@@ -1173,12 +1291,12 @@ def get_news_sentiment(ticker):
             except: continue
         
         if not all_news:
-            fallback_title = f"{clean_ticker} is showing {'positive' if clean_ticker in ['BTC', 'ETH'] else 'notable'} market activity"
-            return "NEUTRAL", fallback_title, 50, 45, "LOW", [], "Aggregated market indicators (Technical Analysis only)"
+            fallback_title = f"{coin_name.title()} ({clean_ticker}) - Technical analysis shows {'positive' if clean_ticker in ['BTC', 'ETH'] else 'notable'} market momentum"
+            return "NEUTRAL", fallback_title, 50, 45, "LOW", [], "No recent news available. Analysis based on technical indicators."
         
         # Scoring Logic
-        pos_k = ['bullish', 'pump', 'surge', 'growth', 'adoption', 'partnership', 'listing', 'breakout', 'ath']
-        neg_k = ['bearish', 'dump', 'hack', 'scam', 'crash', 'regulation', 'ban', 'lawsuit', 'negative']
+        pos_k = ['bullish', 'pump', 'surge', 'growth', 'adoption', 'partnership', 'listing', 'breakout', 'ath', 'rally', 'soar', 'gain']
+        neg_k = ['bearish', 'dump', 'hack', 'scam', 'crash', 'regulation', 'ban', 'lawsuit', 'negative', 'drop', 'fall', 'plunge']
         
         total_score = 50
         for n in all_news[:6]:
@@ -1196,7 +1314,7 @@ def get_news_sentiment(ticker):
         elif avg_score <= 40: sentiment = "NEGATIVE"
         
         impact = "HIGH" if (avg_score >= 75 or avg_score <= 25) else "MEDIUM"
-        analysis_text = f"Aggregate sentiment score: {avg_score}/100 based on {len(all_news)} relevant sources."
+        analysis_text = f"Sentiment score: {avg_score}/100 based on {len(all_news)} {clean_ticker}-specific news sources."
         
         # Sort news by timestamp descending
         all_news.sort(key=lambda x: x['timestamp'], reverse=True)
