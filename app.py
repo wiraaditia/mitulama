@@ -167,21 +167,24 @@ st.set_page_config(page_title="mitulama", page_icon="favicon.png", layout="wide"
 
 
 def render_market_analysis(df):
+    # Get current selected ticker for contextual analysis
+    current_symbol = st.session_state.get('current_ticker', 'BTC').upper()
+    
     # --- SECTOR ANALYSIS & CHARTS ---
     st.markdown("### MARKET & SECTOR ANALYSIS")
     
     # 1. Prepare Data for Charts
     # Simple Sector Inference (Same as diag script)
     sectors = {
-        'Layer 1': ['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'TRX', 'NEAR', 'KAS', 'SUI', 'SEI', 'APT', 'ALGO', 'HBAR', 'XRP', 'BNB', 'LTC', 'BCH', 'ETC', 'XLM', 'VET', 'ICP', 'TON', 'STX', 'EGLD', 'KAVA', 'MINA'],
-        'Layer 2': ['MATIC', 'ARB', 'OP', 'MNT', 'STRK', 'BLAST', 'BASE', 'METIS', 'LRC', 'IMX', 'POL', 'RIVER', 'ZKSYNC', 'TAIKO', 'SCR'],
-        'DeFi': ['UNI', 'LINK', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'RUNE', 'INJ', 'JUP', 'DYDX', 'LDO', 'PENDLE', 'EIGEN', 'RAY', 'ORCA', 'CAKE', 'COW', 'DRIFT'],
-        'AI & Big Data': ['TAO', 'FET', 'RNDR', 'NEAR', 'GRT', 'WLD', 'JASMY', 'AKT', 'AR', 'FIL', 'THETA', 'GLM', 'LPT', 'IO', 'ARKM', 'TURBO'],
-        'Meme': ['DOGE', 'SHIB', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME', 'BOME', 'BRETT', 'MOG', 'POPCAT', 'NEIRO', 'PEOPLE', 'MYRO', 'COQ'],
-        'Exchange': ['BNB', 'OKB', 'LEO', 'CRO', 'KCS', 'BGB', 'GT', 'HT', 'KRRX', 'WOO'],
-        'RWA': ['ONDO', 'POLYX', 'PENDLE', 'CHNG', 'TRU', 'CFG', 'OM', 'RSR', 'MPG'],
-        'Gaming/Metaverse': ['IMX', 'SAND', 'MANA', 'AXS', 'GALA', 'BEAM', 'RON', 'PRIME', 'ILV', 'BIGTIME', 'ALICE', 'YGG'],
-        'Infrastructure': ['LINK', 'TIA', 'PYTH', 'STX', 'ENS', 'ANKR', 'GAL', 'DUSK', 'EIGEN', 'ZRO', 'AXL', 'GEL']
+        'Layer 1': ['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'TRX', 'NEAR', 'KAS', 'SUI', 'SEI', 'APT', 'ALGO', 'HBAR', 'XRP', 'BNB', 'LTC', 'BCH', 'ETC', 'XLM', 'VET', 'ICP', 'TON', 'STX', 'EGLD', 'KAVA', 'MINA', 'HNT', 'KSM', 'ROSE', 'IOTX', 'ZEN', 'CELO', 'FLOW', 'EOS', 'ZIL', 'QTUM', 'ICX', 'GLMR', 'ASTR'],
+        'Layer 2': ['MATIC', 'ARB', 'OP', 'MNT', 'STRK', 'BLAST', 'BASE', 'METIS', 'LRC', 'IMX', 'POL', 'RIVER', 'ZKSYNC', 'TAIKO', 'SCR', 'EVMOS', 'CANTO', 'GLMR', 'SKL', 'BOBA', 'OMG', 'CELO', 'CART', 'KAVA', 'SYS'],
+        'DeFi': ['UNI', 'LINK', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'RUNE', 'INJ', 'JUP', 'DYDX', 'LDO', 'PENDLE', 'EIGEN', 'RAY', 'ORCA', 'CAKE', 'COW', 'DRIFT', 'AERO', 'ENA', 'CVX', 'BAL', 'GMX', 'JOE', 'SUSHI', 'LQTY', 'PERP', 'ANKR', 'BADGER'],
+        'AI & Big Data': ['TAO', 'FET', 'RNDR', 'NEAR', 'GRT', 'WLD', 'JASMY', 'AKT', 'AR', 'FIL', 'THETA', 'GLM', 'LPT', 'IO', 'ARKM', 'TURBO', 'NOS', 'OCEAN', 'BALE', 'PAL', 'PAAL', 'AIOZ', 'PRIME', 'VANRY', 'ORAI'],
+        'Meme': ['DOGE', 'SHIB', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME', 'BOME', 'BRETT', 'MOG', 'POPCAT', 'NEIRO', 'PEOPLE', 'MYRO', 'COQ', 'TURBO', 'DEGEN', 'TOSHI', 'WEN', 'LADYS', 'MUMU', 'SHIBASWAP', 'ELON', 'KISHU'],
+        'Exchange': ['BNB', 'OKB', 'LEO', 'CRO', 'KCS', 'BGB', 'GT', 'HT', 'KRRX', 'WOO', 'DYDX', 'GNS', 'MEXC', 'TKO', 'WRX', 'COIN'],
+        'RWA': ['ONDO', 'POLYX', 'PENDLE', 'CHNG', 'TRU', 'CFG', 'OM', 'RSR', 'MPG', 'LTO', 'CPOOL', 'RIO', 'GFI', 'SLBT'],
+        'Gaming/Metaverse': ['IMX', 'SAND', 'MANA', 'AXS', 'GALA', 'BEAM', 'RON', 'PRIME', 'ILV', 'BIGTIME', 'ALICE', 'YGG', 'PYR', 'GHST', 'UOS', 'SUPER', 'GODS', 'NAKA', 'MGG'],
+        'Infrastructure': ['LINK', 'TIA', 'PYTH', 'STX', 'ENS', 'ANKR', 'GAL', 'DUSK', 'EIGEN', 'ZRO', 'AXL', 'GEL', 'GRT', 'FIL', 'AR', 'THETA', 'HNT', 'SC', 'GLM', 'LPT', 'STORJ', 'BZZ', 'AKT']
     }
     
     # Process df to get sector data
@@ -190,9 +193,10 @@ def render_market_analysis(df):
     sector_performance = {k: [] for k in sectors}
     sector_performance['Others'] = []
     
-    for idx, row in df.iterrows():
-        ticker = row['Ticker']
-        chg = row['Change %']
+    # USE GLOBAL CRYPTO_DATA FOR STABLE CHARTS (Instead of volatile screened 'df')
+    for coin in CRYPTO_DATA:
+        ticker = coin['symbol'].upper()
+        chg = coin.get('price_change_percentage_24h', 0) or 0
         assigned = False
         for s, tickers in sectors.items():
             if ticker in tickers:
@@ -220,9 +224,15 @@ def render_market_analysis(df):
 
     # --- SECTOR INSIGHTS & METRICS ---
     if not pie_data.empty and not bar_df.empty:
-        # 1. Determine Dominance & Top Performance
+        # 1. Determine Dominance & Top Performance (Exclude "Others" for Top Performer)
         dominant_sector = pie_data.sort_values('Count', ascending=False).iloc[0]
-        top_sector = bar_df.sort_values('Avg Change %', ascending=False).iloc[0]
+        
+        # Determine Top Performer excluding "Others"
+        valid_bar_df = bar_df[bar_df['Sector'] != 'Others']
+        if not valid_bar_df.empty:
+            top_sector = valid_bar_df.sort_values('Avg Change %', ascending=False).iloc[0]
+        else:
+            top_sector = bar_df.sort_values('Avg Change %', ascending=False).iloc[0]
         
         # 2. AI Forecast Logic (Simple Heuristic Rule-Based)
         forecast_text = ""
@@ -363,10 +373,11 @@ def render_market_analysis(df):
                 font=dict(family="Orbitron", color="white", size=14), # Larger font
                 xaxis=dict(showgrid=False, tickangle=-45), # Rotate labels explicitly
                 yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-                showlegend=False
+                showlegend=False,
+                dragmode='pan'
             )
             
-            event_bar = st.plotly_chart(fig_bar, use_container_width=True, on_select="rerun", selection_mode="points")
+            event_bar = st.plotly_chart(fig_bar, use_container_width=True, on_select="rerun", selection_mode="points", config={'scrollZoom': True})
         else:
             st.info("No performance data available.")
             event_bar = None
@@ -374,7 +385,9 @@ def render_market_analysis(df):
     # --- BTC MACRO ANALYSIS & LIQUIDITY PULSE ---
     st.markdown("---")
     st.markdown("### BTC MACRO ANALYSIS & LIQUIDITY PULSE")
-    
+
+    # Initialize session state for chart data consistency
+
     # Initialize session state for chart data consistency
     if 'macro_df' not in st.session_state:
         st.session_state.macro_df = None
@@ -384,23 +397,6 @@ def render_market_analysis(df):
         st.session_state.flow_df = None
     if 'whale_metrics' not in st.session_state:
         st.session_state.whale_metrics = None
-    
-    # NEW: Forecast Horizon Selector
-    f_col1, f_col2 = st.columns([1, 2])
-    with f_col1:
-        horizon = st.radio(
-            "Pilih Horizon Forecast:",
-            ["Harian (30 Hari)", "Bulanan (12 Bulan)", "Tahunan (3 Tahun)"],
-            horizontal=True,
-            key="forecast_horizon"
-        )
-    with f_col2:
-        if st.button("🔄 Refresh Data", help="Generate ulang data chart"):
-            st.session_state.macro_df = None
-            st.session_state.forecast_data = {}
-            st.session_state.flow_df = None
-            st.session_state.whale_metrics = None
-            st.rerun()
     
     m_col1, m_col2 = st.columns(2)
     
@@ -413,18 +409,39 @@ def render_market_analysis(df):
         
         # Generate data only if not cached
         if st.session_state.macro_df is None:
-            # Generating mock historical data for correlation (Expanded to 180 days)
-            dates = pd.date_range(end=datetime.now(), periods=180, freq='D')
-            
-            # M2 is a proxy for global liquidity (often leads BTC)
-            m2_data = np.cumsum(np.random.normal(0.5, 0.2, 180)) + 100
-            btc_price_trend = np.cumsum(np.random.normal(0.4, 0.5, 180)) + 90
-            
-            st.session_state.macro_df = pd.DataFrame({
-                'Date': dates,
-                'Global M2 Proxy': m2_data,
-                'BTC Price Index': btc_price_trend
-            })
+            try:
+                # Use real BTC history from yfinance
+                btc_hist = yf.Ticker("BTC-USD").history(period="180d")
+                if not btc_hist.empty:
+                    # Normalize BTC price to an index starting at 100 for better comparison with M2
+                    btc_price_trend = (btc_hist['Close'] / btc_hist['Close'].iloc[0]) * 100
+                    dates = btc_hist.index
+                    
+                    # Create a deterministic M2 proxy based on DXY or just a seeded growth trend
+                    # Real global M2 data is hard to get in real-time without specific APIs
+                    # We'll use a seeded trend that is consistent for the day
+                    np.random.seed(int(time.strftime("%Y%m%d")))
+                    m2_data = np.cumsum(np.random.normal(0.05, 0.1, len(dates))) + 100
+                    
+                    st.session_state.macro_df = pd.DataFrame({
+                        'Date': dates,
+                        'Global M2 Proxy': m2_data,
+                        'BTC Price Index': btc_price_trend
+                    })
+                else:
+                    raise Exception("Empty yfinance data")
+            except Exception as e:
+                # Deterministic Fallback
+                dates = pd.date_range(end=datetime.now(), periods=180, freq='D')
+                np.random.seed(42)
+                m2_data = np.cumsum(np.random.normal(0.5, 0.2, 180)) + 100
+                btc_price_trend = np.cumsum(np.random.normal(0.4, 0.5, 180)) + 90
+                
+                st.session_state.macro_df = pd.DataFrame({
+                    'Date': dates,
+                    'Global M2 Proxy': m2_data,
+                    'BTC Price Index': btc_price_trend
+                })
         
         # Use cached data
         macro_df = st.session_state.macro_df
@@ -441,15 +458,25 @@ def render_market_analysis(df):
             margin=dict(t=10, b=10, l=10, r=10),
             height=300,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            xaxis=dict(showgrid=False, range=[dates.iloc[-30], dates.iloc[-1]]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
+            xaxis=dict(showgrid=False), # Removed hardcoded range for auto-scale
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)'),
+            dragmode='pan'
         )
-        st.plotly_chart(fig_macro, use_container_width=True)
+        st.plotly_chart(fig_macro, use_container_width=True, config={'scrollZoom': True})
         st.info("Insight: Likuiditas global (M2) memiliki korelasi positif kuat dengan BTC. Ekspansi M2 biasanya mendahului kenaikan harga BTC.")
 
     with m_col2:
+        # Horizon Selector moved here, placed above the price projection
+        horizon = st.radio(
+            "Pilih Horizon Forecast:",
+            ["Harian (30 Hari)", "Bulanan (12 Bulan)", "Tahunan (3 Tahun)"],
+            horizontal=True,
+            key="forecast_horizon",
+            label_visibility="visible"
+        )
+
         st.markdown(f'''
-            <div style="margin-bottom: 10px;">
+            <div style="margin-top: 10px; margin-bottom: 10px;">
                 <span style="font-size: 13px; color: #848e9c; font-weight: 700; text-transform: uppercase;">Proyeksi Harga BTC ({horizon})</span>
             </div>
         ''', unsafe_allow_html=True)
@@ -477,6 +504,10 @@ def render_market_analysis(df):
                 trend = 0.50
                 
             future_dates = pd.date_range(start=datetime.now(), periods=periods, freq=freq)
+            
+            # Seed the forecast based on the date and ticker to ensure consistency
+            seed_val = int(time.strftime("%Y%m%d")) + hash(current_symbol) % 10000
+            np.random.seed(seed_val)
             
             # Base the trend on BTC's 24h change for a tiny bit of realism
             local_trend = trend + (btc_data.get('price_change_percentage_24h', 0) / 1000)
@@ -531,10 +562,11 @@ def render_market_analysis(df):
             plot_bgcolor='rgba(0,0,0,0)',
             margin=dict(t=10, b=10, l=10, r=10),
             height=300,
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickformat='$,')
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickformat='$,'),
+            dragmode='pan'
         )
         
-        st.plotly_chart(fig_forecast, use_container_width=True)
+        st.plotly_chart(fig_forecast, use_container_width=True, config={'scrollZoom': True})
         st.markdown(f"""
         <div style="background: rgba(255, 45, 117, 0.05); padding: 10px; border-radius: 6px; border: 1px solid var(--border-pink);">
             <div style="font-size: 11px; color: #ff80ab; font-weight: 700;">AI FORECAST ENGINE</div>
@@ -558,8 +590,8 @@ def render_market_analysis(df):
         # Generate flow data only if not cached
         if st.session_state.flow_df is None:
             # Simulate Flow Data based on real volume and price change (Expanded to 60 days)
-            # Logic: If price is up on high volume, it's likely net inflow to cold storage (Bullish) or net buying.
-            # If price is down on high volume, it's net outflow from wallets to exchanges (Bearish).
+            # Seed based on date to ensure consistency on refresh
+            np.random.seed(int(time.strftime("%Y%m%d")))
             
             flow_days = pd.date_range(end=datetime.now(), periods=60, freq='D')
             
@@ -594,10 +626,11 @@ def render_market_analysis(df):
             plot_bgcolor='rgba(0,0,0,0)',
             margin=dict(t=10, b=10, l=10, r=10),
             height=250,
-            xaxis=dict(showgrid=False, title="Tanggal", range=[flow_days.iloc[-14], flow_days.iloc[-1]]),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', title="Jumlah ($M)")
+            xaxis=dict(showgrid=False, title="Tanggal"), # Removed hardcoded range for auto-scale
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', title="Jumlah ($M)"),
+            dragmode='pan'
         )
-        st.plotly_chart(fig_flow, use_container_width=True)
+        st.plotly_chart(fig_flow, use_container_width=True, config={'scrollZoom': True})
         
     with flow_col2:
         st.markdown(f'''
@@ -608,10 +641,25 @@ def render_market_analysis(df):
         
         # Generate whale metrics only if not cached
         if st.session_state.whale_metrics is None:
+            # Deterministic Whale Metrics based on real coin data
+            coin_info = COIN_MAP.get(current_symbol, {})
+            chg_24h = coin_info.get('price_change_percentage_24h', 0) or 0
+            vol_mcap = (coin_info.get('total_volume', 0) / (coin_info.get('market_cap', 1) or 1))
+            
+            # Deterministic Score Logic
+            # Accumulation Score: High if price is stable/up and volume/mktcap is high
+            acc_score = min(95, max(40, 60 + (vol_mcap * 100) + (chg_24h * 2)))
+            
+            # Exchange Balance Change: Proxy based on price change (price up = outflow to cold storage)
+            exch_bal = -chg_24h * 0.15 + (vol_mcap * 5)
+            
+            # Large TX Count: Proxy based on volume
+            large_tx = int(min(2000, 50 + (vol_mcap * 5000)))
+            
             st.session_state.whale_metrics = {
-                'whale_accumulation': random.randint(65, 95),
-                'exchange_balance_change': random.uniform(-2.5, 1.5),
-                'large_tx_count': random.randint(120, 500)
+                'whale_accumulation': int(acc_score),
+                'exchange_balance_change': exch_bal,
+                'large_tx_count': large_tx
             }
         
         # Use cached metrics
@@ -747,6 +795,7 @@ def render_market_analysis(df):
                     with h_col1:
                         st.markdown(f'''
                             <div style="display: flex; align-items: center; gap: 8px;">
+                                <img src="{logo_url}" style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.05); padding: 2px;">
                                 <div>
                                     <div style="font-weight: 700; font-size: 14px; color: #e0e0e0; line-height: 1;">{ticker_clean}</div>
                                     <div style="font-size: 10px; color: #848e9c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">{row.get('Name', '')}</div>
@@ -771,8 +820,9 @@ def render_market_analysis(df):
                         </div>
                     ''', unsafe_allow_html=True)
 
-                    # Simulated Net Flow for Card
-                    net_flow_val = random.uniform(-10, 15)
+                    # Deterministic Net Flow for Card
+                    vol_mcap_card = (coin_data.get('total_volume', 0) / (coin_data.get('market_cap', 1) or 1))
+                    net_flow_val = (row['Change %'] * 0.5) + (vol_mcap_card * 10)
                     flow_color = "#00c853" if net_flow_val > 0 else "#ff5252"
                     
                     st.markdown(f'''
@@ -1055,7 +1105,7 @@ USER_AGENTS = [
 ]
 
 # --- COINGECKO DATA FETCHING ---
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3605) # Small change to bust old cache without sparkline data
 def get_top_crypto_tickers(count=1000):
     """Fetch top N cryptocurrencies from CoinGecko (multi-page)"""
     all_data = []
@@ -1064,7 +1114,7 @@ def get_top_crypto_tickers(count=1000):
     
     try:
         for page in range(1, pages + 1):
-            url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}"
+            url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}&sparkline=true"
 
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
@@ -1667,7 +1717,8 @@ with st.sidebar:
                             "name": coin['name'],
                             "price": coin.get('current_price', 0) or 0,
                             "chg": coin.get('price_change_percentage_24h', 0) or 0,
-                            "logo": coin['image']
+                            "logo": coin['image'],
+                            "sparkline": coin.get('sparkline_in_7d', {}).get('price', [])
                         }
                     except:
                         return None
@@ -1763,11 +1814,11 @@ with st.sidebar:
             with r_col3:
                 # Sparkline
                 trend_color = "#00c853" if item['chg'] >= 0 else "#ff5252"
-                trend_data = [
-                    item['price'] * (1 + (random.uniform(0, 0.03) if item['chg'] < 0 else -random.uniform(0, 0.03)))
-                    for _ in range(8)
-                ]
-                trend_data.append(item['price'])
+                trend_data = item.get('sparkline', [])
+                if not trend_data:
+                    # Fallback if sparkline is missing
+                    trend_data = [item['price']] * 7
+                
                 st.markdown(f"<div style='margin-top:5px;'>{make_sparkline(trend_data, trend_color)}</div>", unsafe_allow_html=True)
                 
             with r_col4:
@@ -1833,8 +1884,9 @@ with st.sidebar:
                 st.markdown(f"<div class='wl-name' style='margin-top:-15px; color:#ff80ab;'>{item['name']}</div>", unsafe_allow_html=True)
             with r_col3:
                 trend_color = "#00c853"
-                trend_data = [item['price'] * (1 - random.uniform(0, 0.05)) for _ in range(8)]
-                trend_data.append(item['price'])
+                trend_data = item.get('sparkline', [])
+                if not trend_data:
+                    trend_data = [item['price']] * 7
                 st.markdown(f"<div style='margin-top:5px;'>{make_sparkline(trend_data, trend_color)}</div>", unsafe_allow_html=True)
             with r_col4:
                 diff = abs(item['price'] * (item['chg']/100))
@@ -1875,8 +1927,9 @@ with st.sidebar:
             with r_col3:
                 is_up = item['chg'] >= 0
                 trend_color = "#00c853" if is_up else "#ff5252"
-                trend_data = [item['price'] * (1 + (random.uniform(0, 0.05) if not is_up else -random.uniform(0, 0.05))) for _ in range(8)]
-                trend_data.append(item['price'])
+                trend_data = item.get('sparkline', [])
+                if not trend_data:
+                    trend_data = [item['price']] * 7
                 st.markdown(f"<div style='margin-top:5px;'>{make_sparkline(trend_data, trend_color)}</div>", unsafe_allow_html=True)
             with r_col4:
                 is_up = item['chg'] >= 0
@@ -2147,6 +2200,8 @@ if main_active_tab == "Chart":
         sb_arb = sb_price * 0.90
         
         def generate_mock_order_book(center_price):
+            # Seed based on price to keep it stable if price doesn't change much
+            random.seed(int(center_price * 100) + hash(current_symbol) % 1000)
             rows = []
             for i in range(8):
                 bid_p = center_price * (1 - (i * 0.001))
@@ -2162,6 +2217,8 @@ if main_active_tab == "Chart":
             return rows
 
         def generate_mock_running_trade(ticker_code, center_price):
+            # Seed based on price
+            random.seed(int(center_price * 100) + hash(ticker_code) % 1000 + 5)
             trades = []
             for i in range(15):
                 t_time = time.strftime("%H:%M:%S")
@@ -2450,9 +2507,6 @@ elif main_active_tab == "Asset Stats":
 
 elif main_active_tab == "Professional Analyst Advisor":
     # NAVIGATION BACK
-    if st.button("Kembali ke Market Screener", key="back_from_advisor"):
-        st.session_state.main_active_tab = "Chart"
-        st.rerun()
         
     st.markdown(f"## Penasehat Analis Professional")
     st.caption("Tanyakan apapun tentang crypto dan dapatkan penjelasan berdasarkan analisis teknikal & market buzz.")
@@ -2550,7 +2604,7 @@ elif main_active_tab == "Professional Analyst Advisor":
                         explanation = f"""
 **Analisis Market:**
 
-**{data['Name']} ({data['Ticker']})** saat ini menunjukkan status **{data['Status']}**. Dengan harga saat ini di **{format_price(current_price)}**, asset ini memiliki perubahan harian sebesar **{price_change_1d:+.2f}%**.
+**{data['Name']} ({data['Ticker']})** saat ini menunjukkan status **{data['Status']}**. Dengan harga saat ini **{format_price(current_price)}**, asset ini memiliki perubahan harian sebesar **{price_change_1d:+.2f}%**.
 
 **Kondisi Teknis & Sentiment:**
 - **Momentum:** RSI berada di level **{current_rsi:.1f}**, menunjukkan kondisi market yang **{rsi_text.lower()}**.
@@ -2574,10 +2628,10 @@ elif main_active_tab == "Professional Analyst Advisor":
                         <div style="background: #1e222d; padding: 15px; border-radius: 4px; border: 1px solid #2a2e39;">
                             <div style="font-size: 12px; color: #848e9c; margin-bottom: 12px; font-weight: 600;">TARGET PROFIT:</div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #d1d4dc;">Target 1 (Konservatif):</span> <span style="color:#00c853; font-weight:700;">${resistance_1:,.2f}</span>
+                                <span style="color: #d1d4dc;">Target 1 (Konservatif):</span> <span style="color:#00c853; font-weight:700;">{format_price(resistance_1)}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #d1d4dc;">Target 2 (Agresif):</span> <span style="color:#00c853; font-weight:700;">${resistance_2:,.2f}</span>
+                                <span style="color: #d1d4dc;">Target 2 (Agresif):</span> <span style="color:#00c853; font-weight:700;">{format_price(resistance_2)}</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -2586,7 +2640,7 @@ elif main_active_tab == "Professional Analyst Advisor":
                         <div style="background: #1e222d; padding: 15px; border-radius: 4px; border: 1px solid #2a2e39;">
                             <div style="font-size: 12px; color: #848e9c; margin-bottom: 12px; font-weight: 600;">RISK MANAGEMENT:</div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="color: #d1d4dc;">Stop Loss:</span> <span style="color:#ff5252; font-weight:700;">${support:,.2f}</span>
+                                <span style="color: #d1d4dc;">Stop Loss:</span> <span style="color:#ff5252; font-weight:700;">{format_price(support)}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                                 <span style="color: #d1d4dc;">Risk/Reward Ratio:</span> <span style="color:#ffa726; font-weight:700;">1:2.5</span>
@@ -2814,41 +2868,5 @@ Silakan tanyakan lagi dengan topik yang lebih spesifik!
                 'response': response
             })
     
-    # Always show chart
-    if 'advisor_ticker' not in st.session_state: 
-        st.session_state.advisor_ticker = "BTC"
-    
-    st.markdown("---")
-    st.markdown(f"### 📈 Live Chart Forecast: {st.session_state.advisor_ticker}")
-    tv_symbol = f"BINANCE:{st.session_state.advisor_ticker}USDT"
-    
-    st.components.v1.html(
-        f"""
-        <div style="height: 500px; width: 100%;">
-            <div id="tradingview_forecast" style="height: 100%; width: 100%;"></div>
-            <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-            <script type="text/javascript">
-            new TradingView.widget({{
-                "autosize": true,
-                "symbol": "{tv_symbol}",
-                "interval": "D",
-                "timezone": "Asia/Jakarta",
-                "theme": "dark",
-                "style": "1",
-                "locale": "en",
-                "toolbar_bg": "#1e222d",
-                "enable_publishing": false,
-                "hide_side_toolbar": false,
-                "allow_symbol_change": true,
-                "container_id": "tradingview_forecast",
-                "details": true,
-                "hotlist": true,
-                "withdateranges": true
-            }});
-            </script>
-        </div>
-        """,
-        height=520,
-    )
 
 
