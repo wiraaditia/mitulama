@@ -388,6 +388,15 @@ def render_market_analysis(df):
 
     # Initialize session state for chart data consistency
 
+    # Horizon Selector moved to top of Macro section to control both charts
+    horizon = st.radio(
+        "Pilih Horizon Analisis:",
+        ["7 Hari", "30 Hari", "12 Bulan", "3 Tahun"],
+        horizontal=True,
+        key="macro_horizon",
+        label_visibility="visible"
+    )
+
     # Initialize session state for chart data consistency
     if 'macro_df' not in st.session_state:
         st.session_state.macro_df = None
@@ -397,7 +406,16 @@ def render_market_analysis(df):
         st.session_state.flow_df = None
     if 'whale_metrics' not in st.session_state:
         st.session_state.whale_metrics = None
+
+    # Check for horizon change to reset cached data
+    if 'last_horizon' not in st.session_state:
+        st.session_state.last_horizon = horizon
     
+    if st.session_state.last_horizon != horizon:
+        st.session_state.macro_df = None
+        st.session_state.forecast_data = {}
+        st.session_state.last_horizon = horizon
+
     m_col1, m_col2 = st.columns(2)
     
     with m_col1:
@@ -409,15 +427,28 @@ def render_market_analysis(df):
         
         # Generate data only if not cached
         if st.session_state.macro_df is None:
+            # Map horizon to yfinance period/days
+            period_map = {
+                "7 Hari": ("7d", 7),
+                "30 Hari": ("30d", 30),
+                "12 Bulan": ("1y", 365),
+                "3 Tahun": ("5y", 1095) # 5y for 3y window
+            }
+            yf_period, fallback_days = period_map.get(horizon, ("180d", 180))
+
             try:
                 # Use real BTC and Gold history from yfinance
-                btc_hist = yf.Ticker("BTC-USD").history(period="180d")
-                gold_hist = yf.Ticker("GC=F").history(period="180d")
+                btc_hist = yf.Ticker("BTC-USD").history(period=yf_period)
+                gold_hist = yf.Ticker("GC=F").history(period=yf_period)
                 
                 if not btc_hist.empty and not gold_hist.empty:
                     # Align dates (Gold has market holidays, BTC doesn't)
                     combined = pd.concat([btc_hist['Close'], gold_hist['Close']], axis=1, keys=['BTC', 'Gold']).fillna(method='ffill').dropna()
                     
+                    # If 3 Tahun, slice to last 3 years
+                    if horizon == "3 Tahun":
+                        combined = combined.last('3Y')
+
                     # Normalize to index starting at 100
                     btc_price_trend = (combined['BTC'] / combined['BTC'].iloc[0]) * 100
                     gold_price_trend = (combined['Gold'] / combined['Gold'].iloc[0]) * 100
@@ -437,11 +468,11 @@ def render_market_analysis(df):
                     raise Exception("Empty yfinance data")
             except Exception as e:
                 # Deterministic Fallback
-                dates = pd.date_range(end=datetime.now(), periods=180, freq='D')
+                dates = pd.date_range(end=datetime.now(), periods=fallback_days, freq='D')
                 np.random.seed(42)
-                m2_data = np.cumsum(np.random.normal(0.5, 0.2, 180)) + 100
-                btc_price_trend = np.cumsum(np.random.normal(0.4, 0.5, 180)) + 90
-                gold_price_trend = np.cumsum(np.random.normal(0.1, 0.1, 180)) + 98
+                m2_data = np.cumsum(np.random.normal(0.5, 0.2, fallback_days)) + 100
+                btc_price_trend = np.cumsum(np.random.normal(0.4, 0.5, fallback_days)) + 90
+                gold_price_trend = np.cumsum(np.random.normal(0.1, 0.1, fallback_days)) + 98
                 
                 st.session_state.macro_df = pd.DataFrame({
                     'Date': dates,
@@ -473,15 +504,6 @@ def render_market_analysis(df):
         st.info("Insight: Likuiditas global (M2) memiliki korelasi positif kuat dengan BTC. Ekspansi M2 biasanya mendahului kenaikan harga BTC.")
 
     with m_col2:
-        # Horizon Selector moved here, placed above the price projection
-        horizon = st.radio(
-            "Pilih Horizon Forecast:",
-            ["Harian (30 Hari)", "Bulanan (12 Bulan)", "Tahunan (3 Tahun)"],
-            horizontal=True,
-            key="forecast_horizon",
-            label_visibility="visible"
-        )
-
         st.markdown(f'''
             <div style="margin-top: 10px; margin-bottom: 10px;">
                 <span style="font-size: 13px; color: #848e9c; font-weight: 700; text-transform: uppercase;">Proyeksi Harga BTC ({horizon})</span>
@@ -494,17 +516,22 @@ def render_market_analysis(df):
             btc_data = COIN_MAP.get('BTC', {})
             btc_price = btc_data.get('current_price', 90000)
             
-            if "Harian" in horizon:
+            if "7 Hari" in horizon:
+                freq = 'D'
+                periods = 7
+                volatility = 0.015
+                trend = 0.0005
+            elif "30 Hari" in horizon:
                 freq = 'D'
                 periods = 30
                 volatility = 0.02
                 trend = 0.001
-            elif "Bulanan" in horizon:
+            elif "12 Bulan" in horizon:
                 freq = 'ME'
                 periods = 12
                 volatility = 0.12
                 trend = 0.05
-            else: # Tahunan
+            else: # 3 Tahun
                 freq = 'YE'
                 periods = 3
                 volatility = 0.40
@@ -1111,10 +1138,14 @@ USER_AGENTS = [
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
 ]
 
+# --- COINGECKO DATA PERSISTENCE ---
+PERSISTENT_CRYPTO_FILE = ".persistent_crypto_data.pkl"
+PERSISTENT_GLOBAL_FILE = ".persistent_global_stats.pkl"
+
 # --- COINGECKO DATA FETCHING ---
-@st.cache_data(ttl=3605) # Small change to bust old cache without sparkline data
+@st.cache_data(ttl=3605)
 def get_top_crypto_tickers(count=1000):
-    """Fetch top N cryptocurrencies from CoinGecko (multi-page)"""
+    """Fetch top N cryptocurrencies from CoinGecko with persistent file fallback"""
     all_data = []
     per_page = 250
     pages = (count + per_page - 1) // per_page
@@ -1122,18 +1153,42 @@ def get_top_crypto_tickers(count=1000):
     try:
         for page in range(1, pages + 1):
             url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={per_page}&page={page}&sparkline=true"
-
-            response = requests.get(url, timeout=10)
+            # Rotasi User-Agent to help avoid some blocks
+            headers = {'User-Agent': random.choice(USER_AGENTS)}
+            response = requests.get(url, headers=headers, timeout=15)
+            
             if response.status_code == 200:
                 page_data = response.json()
                 all_data.extend(page_data)
-                # Small delay to avoid aggressive rate limiting
-                if pages > 1: time.sleep(0.5)
+                if pages > 1: time.sleep(1.0) # Slightly longer delay for stability
             else:
                 break
-        return all_data[:count]
+        
+        if all_data:
+            # Successfully fetched some data, update persistent cache
+            all_data_final = all_data[:count]
+            try:
+                with open(PERSISTENT_CRYPTO_FILE, 'wb') as f:
+                    pickle.dump(all_data_final, f)
+            except:
+                pass
+            return all_data_final
+        else:
+            # No data from API, try loading from cache
+            if os.path.exists(PERSISTENT_CRYPTO_FILE):
+                with open(PERSISTENT_CRYPTO_FILE, 'rb') as f:
+                    return pickle.load(f)
+            return []
+            
     except Exception as e:
-        st.error(f"Error fetching data from CoinGecko: {e}")
+        # Error during fetching, try loading from cache
+        if os.path.exists(PERSISTENT_CRYPTO_FILE):
+            try:
+                with open(PERSISTENT_CRYPTO_FILE, 'rb') as f:
+                    return pickle.load(f)
+            except:
+                pass
+        st.warning(f"⚠️ Market data unavailable (API limit). Using cached data.")
         return []
 
 # Initialize TICKERS with CoinGecko data (Up to 1000 coins)
@@ -1197,19 +1252,38 @@ def get_crypto_stats(ticker):
 
 @st.cache_data(ttl=300)
 def get_global_market_stats():
-    """Fetch global crypto market stats instead of IHSG"""
+    """Fetch global crypto market stats with persistent fallback"""
     try:
         url = "https://api.coingecko.com/api/v3/global"
-        res = requests.get(url, timeout=5)
-        data = res.json()['data']
+        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        res = requests.get(url, headers=headers, timeout=10)
         
-        return {
-            'price': f"${data['total_market_cap']['usd']/1e12:.2f}T",
-            'change': data['market_cap_change_percentage_24h_usd'],
-            'percent': f"{data['market_cap_change_percentage_24h_usd']:+.2f}%",
-            'btc_d': f"{data['market_cap_percentage']['btc']:.1f}%"
-        }
+        if res.status_code == 200:
+            data = res.json()['data']
+            stats = {
+                'price': f"${data['total_market_cap']['usd']/1e12:.2f}T",
+                'change': data['market_cap_change_percentage_24h_usd'],
+                'percent': f"{data['market_cap_change_percentage_24h_usd']:+.2f}%",
+                'btc_d': f"{data['market_cap_percentage']['btc']:.1f}%"
+            }
+            # Update persistent cache
+            try:
+                with open(PERSISTENT_GLOBAL_FILE, 'wb') as f:
+                    pickle.dump(stats, f)
+            except:
+                pass
+            return stats
+        else:
+            raise Exception("Global API error")
+            
     except:
+        # Fallback to persistent cache
+        if os.path.exists(PERSISTENT_GLOBAL_FILE):
+            try:
+                with open(PERSISTENT_GLOBAL_FILE, 'rb') as f:
+                    return pickle.load(f)
+            except:
+                pass
         return None
 
 @st.cache_data(ttl=1800) # Cache 30 mins - reduce news scraping
