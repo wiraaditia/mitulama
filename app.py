@@ -402,6 +402,14 @@ def render_market_analysis(df):
         st.session_state.macro_df = None
     if 'forecast_data' not in st.session_state:
         st.session_state.forecast_data = {}
+    if 'forecast_data_gold' not in st.session_state:
+        st.session_state.forecast_data_gold = {}
+    if 'forecast_data_ihsg' not in st.session_state:
+        st.session_state.forecast_data_ihsg = {}
+    if 'forecast_data_m2usdt' not in st.session_state:
+        st.session_state.forecast_data_m2usdt = {}
+    if 'projection_type' not in st.session_state:
+        st.session_state.projection_type = 'BTC'
     if 'flow_df' not in st.session_state:
         st.session_state.flow_df = None
     if 'whale_metrics' not in st.session_state:
@@ -414,6 +422,9 @@ def render_market_analysis(df):
     if st.session_state.last_horizon != horizon:
         st.session_state.macro_df = None
         st.session_state.forecast_data = {}
+        st.session_state.forecast_data_gold = {}
+        st.session_state.forecast_data_ihsg = {}
+        st.session_state.forecast_data_m2usdt = {}
         st.session_state.last_horizon = horizon
 
     m_col1, m_col2 = st.columns(2)
@@ -504,67 +515,182 @@ def render_market_analysis(df):
         st.info("Insight: Likuiditas global (M2) memiliki korelasi positif kuat dengan BTC. Ekspansi M2 biasanya mendahului kenaikan harga BTC.")
 
     with m_col2:
+        # Projection Type Selection
         st.markdown(f'''
             <div style="margin-top: 10px; margin-bottom: 10px;">
-                <span style="font-size: 13px; color: #848e9c; font-weight: 700; text-transform: uppercase;">Proyeksi Harga BTC ({horizon})</span>
+                <span style="font-size: 13px; color: #848e9c; font-weight: 700; text-transform: uppercase;">Proyeksi Harga</span>
             </div>
         ''', unsafe_allow_html=True)
         
-        # Generate forecast data only if not cached for this horizon
-        if horizon not in st.session_state.forecast_data:
-            # Forecast Logic based on selection
-            btc_data = COIN_MAP.get('BTC', {})
-            btc_price = btc_data.get('current_price', 90000)
+        # Button selection for projection type
+        proj_col1, proj_col2, proj_col3, proj_col4 = st.columns(4)
+        with proj_col1:
+            if st.button("BTC", use_container_width=True, type="primary" if st.session_state.projection_type == 'BTC' else "secondary"):
+                st.session_state.projection_type = 'BTC'
+        with proj_col2:
+            if st.button("Emas", use_container_width=True, type="primary" if st.session_state.projection_type == 'GOLD' else "secondary"):
+                st.session_state.projection_type = 'GOLD'
+        with proj_col3:
+            if st.button("IHSG", use_container_width=True, type="primary" if st.session_state.projection_type == 'IHSG' else "secondary"):
+                st.session_state.projection_type = 'IHSG'
+        with proj_col4:
+            if st.button("M2/USDT", use_container_width=True, type="primary" if st.session_state.projection_type == 'M2USDT' else "secondary"):
+                st.session_state.projection_type = 'M2USDT'
+        
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        
+        # Projection Logic based on selected type
+        projection_type = st.session_state.projection_type
+        
+        # Configure parameters based on asset type
+        if projection_type == 'BTC':
+            asset_name = 'BTC'
+            forecast_store = st.session_state.forecast_data
+            ticker_symbol = 'BTC-USD'
+            currency_symbol = '$'
+            
+            # Use cached price if available, otherwise fetch fresh
+            if horizon in forecast_store and 'base_price' in forecast_store[horizon]:
+                current_price = forecast_store[horizon]['base_price']
+                price_change_24h = forecast_store[horizon]['base_change']
+            else:
+                asset_data = COIN_MAP.get('BTC', {})
+                current_price = asset_data.get('current_price', 90000)
+                price_change_24h = asset_data.get('price_change_percentage_24h', 0)
             
             if "7 Hari" in horizon:
-                freq = 'D'
-                periods = 7
-                volatility = 0.015
-                trend = 0.0005
+                freq, periods, volatility, trend = 'D', 7, 0.015, 0.0005
             elif "30 Hari" in horizon:
-                freq = 'D'
-                periods = 30
-                volatility = 0.02
-                trend = 0.001
+                freq, periods, volatility, trend = 'D', 30, 0.02, 0.001
             elif "12 Bulan" in horizon:
-                freq = 'ME'
-                periods = 12
-                volatility = 0.12
-                trend = 0.05
-            else: # 3 Tahun
-                freq = 'YE'
-                periods = 3
-                volatility = 0.40
-                trend = 0.50
+                freq, periods, volatility, trend = 'ME', 12, 0.12, 0.05
+            else:  # 3 Tahun
+                freq, periods, volatility, trend = 'YE', 3, 0.40, 0.50
                 
+        elif projection_type == 'GOLD':
+            asset_name = 'Emas'
+            forecast_store = st.session_state.forecast_data_gold
+            ticker_symbol = 'GC=F'
+            currency_symbol = '$'
+            
+            # Use cached price if available, otherwise fetch fresh
+            if horizon in forecast_store and 'base_price' in forecast_store[horizon]:
+                current_price = forecast_store[horizon]['base_price']
+                price_change_24h = forecast_store[horizon]['base_change']
+            else:
+                try:
+                    gold_ticker = yf.Ticker(ticker_symbol)
+                    gold_info = gold_ticker.history(period='1d')
+                    current_price = gold_info['Close'].iloc[-1] if not gold_info.empty else 2000
+                    price_change_24h = ((gold_info['Close'].iloc[-1] - gold_info['Open'].iloc[-1]) / gold_info['Open'].iloc[-1] * 100) if not gold_info.empty else 0
+                except:
+                    current_price = 2000
+                    price_change_24h = 0
+            
+            if "7 Hari" in horizon:
+                freq, periods, volatility, trend = 'D', 7, 0.005, 0.0002
+            elif "30 Hari" in horizon:
+                freq, periods, volatility, trend = 'D', 30, 0.008, 0.0003
+            elif "12 Bulan" in horizon:
+                freq, periods, volatility, trend = 'ME', 12, 0.06, 0.02
+            else:  # 3 Tahun
+                freq, periods, volatility, trend = 'YE', 3, 0.15, 0.10
+                
+        elif projection_type == 'IHSG':
+            asset_name = 'IHSG'
+            forecast_store = st.session_state.forecast_data_ihsg
+            ticker_symbol = '^JKSE'
+            currency_symbol = ''
+            
+            # Use cached price if available, otherwise fetch fresh
+            if horizon in forecast_store and 'base_price' in forecast_store[horizon]:
+                current_price = forecast_store[horizon]['base_price']
+                price_change_24h = forecast_store[horizon]['base_change']
+            else:
+                try:
+                    ihsg_ticker = yf.Ticker(ticker_symbol)
+                    ihsg_info = ihsg_ticker.history(period='1d')
+                    current_price = ihsg_info['Close'].iloc[-1] if not ihsg_info.empty else 7000
+                    price_change_24h = ((ihsg_info['Close'].iloc[-1] - ihsg_info['Open'].iloc[-1]) / ihsg_info['Open'].iloc[-1] * 100) if not ihsg_info.empty else 0
+                except:
+                    current_price = 7000
+                    price_change_24h = 0
+            
+            if "7 Hari" in horizon:
+                freq, periods, volatility, trend = 'D', 7, 0.010, 0.0003
+            elif "30 Hari" in horizon:
+                freq, periods, volatility, trend = 'D', 30, 0.012, 0.0005
+            elif "12 Bulan" in horizon:
+                freq, periods, volatility, trend = 'ME', 12, 0.08, 0.03
+            else:  # 3 Tahun
+                freq, periods, volatility, trend = 'YE', 3, 0.20, 0.15
+                
+        else:  # M2USDT
+            asset_name = 'M2/USDT'
+            forecast_store = st.session_state.forecast_data_m2usdt
+            ticker_symbol = 'USDT-USD'
+            currency_symbol = '$'
+            
+            # Use cached price if available, otherwise fetch fresh
+            if horizon in forecast_store and 'base_price' in forecast_store[horizon]:
+                current_price = forecast_store[horizon]['base_price']
+                price_change_24h = forecast_store[horizon]['base_change']
+            else:
+                try:
+                    usdt_ticker = yf.Ticker(ticker_symbol)
+                    usdt_info = usdt_ticker.history(period='30d')
+                    if not usdt_info.empty:
+                        # M2 estimation based on USDT market cap proxy
+                        current_price = usdt_info['Close'].iloc[-1] * 1000000  # Proxy for M2 supply
+                        price_change_24h = ((usdt_info['Close'].iloc[-1] - usdt_info['Open'].iloc[-1]) / usdt_info['Open'].iloc[-1] * 100)
+                    else:
+                        current_price = 1000000
+                        price_change_24h = 0
+                except:
+                    current_price = 1000000
+                    price_change_24h = 0
+            
+            if "7 Hari" in horizon:
+                freq, periods, volatility, trend = 'D', 7, 0.018, 0.0006
+            elif "30 Hari" in horizon:
+                freq, periods, volatility, trend = 'D', 30, 0.022, 0.0012
+            elif "12 Bulan" in horizon:
+                freq, periods, volatility, trend = 'ME', 12, 0.14, 0.06
+            else:  # 3 Tahun
+                freq, periods, volatility, trend = 'YE', 3, 0.45, 0.55
+        
+        # Generate forecast data only if not cached for this horizon
+        if horizon not in forecast_store:
             future_dates = pd.date_range(start=datetime.now(), periods=periods, freq=freq)
             
             # Seed the forecast based on the date and ticker to ensure consistency
-            seed_val = int(time.strftime("%Y%m%d")) + hash(current_symbol) % 10000
+            seed_val = int(time.strftime("%Y%m%d")) + hash(projection_type) % 10000
             np.random.seed(seed_val)
             
-            # Base the trend on BTC's 24h change for a tiny bit of realism
-            local_trend = trend + (btc_data.get('price_change_percentage_24h', 0) / 1000)
+            # Base the trend on asset's 24h change for a tiny bit of realism
+            local_trend = trend + (price_change_24h / 1000)
             
-            projection = [btc_price]
+            projection = [current_price]
             for i in range(periods - 1):
                 noise = np.random.normal(local_trend, volatility)
                 projection.append(projection[-1] * (1 + noise))
             
-            # Store in session state
-            st.session_state.forecast_data[horizon] = {
+            # Store in session state WITH base price for consistency
+            forecast_store[horizon] = {
                 'dates': future_dates,
                 'projection': projection,
                 'volatility': volatility,
-                'btc_price_change': btc_data.get('price_change_percentage_24h', 0)
+                'price_change': price_change_24h,
+                'base_price': current_price,  # Cache the initial price
+                'base_change': price_change_24h  # Cache the initial change
             }
         
         # Use cached data
-        cached = st.session_state.forecast_data[horizon]
+        cached = forecast_store[horizon]
         future_dates = cached['dates']
         projection = cached['projection']
         volatility = cached['volatility']
-        btc_price_change = cached['btc_price_change']
+        price_change = cached['price_change']
         
         forecast_df = pd.DataFrame({
             'Date': future_dates,
@@ -591,22 +717,29 @@ def render_market_analysis(df):
             line=dict(width=0), name='Zona Kepercayaan', mode='lines'
         )
         
+        # Determine ticker format
+        if currency_symbol:
+            tick_format = f'{currency_symbol},'
+        else:
+            tick_format = ','
+        
         fig_forecast.update_layout(
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
             margin=dict(t=10, b=10, l=10, r=10),
             height=300,
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickformat='$,'),
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickformat=tick_format),
             dragmode='pan'
         )
         
         st.plotly_chart(fig_forecast, use_container_width=True, config={'scrollZoom': True})
         st.markdown(f"""
         <div style="background: rgba(255, 45, 117, 0.05); padding: 10px; border-radius: 6px; border: 1px solid var(--border-pink);">
-            <div style="font-size: 11px; color: #ff80ab; font-weight: 700;">AI FORECAST ENGINE</div>
-            <div style="font-size: 13px; color: #fff; margin-top: 5px;">Prediksi didasarkan pada korelasi M2, Sentiment News ({btc_price_change:+.1f}%), dan Analisis On-chain.</div>
+            <div style="font-size: 11px; color: #ff80ab; font-weight: 700;">AI FORECAST ENGINE - {asset_name}</div>
+            <div style="font-size: 13px; color: #fff; margin-top: 5px;">Prediksi untuk {asset_name} ({horizon}) - Perubahan 24j: {price_change:+.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
+
 
     # NEW: Detailed Inflow/Outflow Pulse
     st.markdown("---")
